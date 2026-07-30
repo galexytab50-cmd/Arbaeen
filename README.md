@@ -101,11 +101,32 @@ https://api.telegram.org/botYOUR_BOT_TOKEN/getWebhookInfo
 
 ## توسعه‌ی محلی (اختیاری)
 
+> ⚠️ فایل `wrangler.toml` عمداً تو ریپو نیست — چون اگه موقع دیپلوی از طریق گیت‌هاب
+> تو ریپو باشه، Cloudflare Pages به‌اشتباه سعی می‌کنه با `wrangler deploy` (مخصوص
+> Workers) دیپلوی کنه و خطا می‌ده. تنظیمات production (KV binding، env variables)
+> رو طبق مراحل ۴ و ۵ بالا، مستقیم تو داشبورد Cloudflare انجام بده، نه با این فایل.
+
+برای تست محلی، یه `wrangler.toml` فقط برای خودت (بدون commit‌کردن) بساز:
+
 ```bash
 npm install
 cp .dev.vars.example .dev.vars   # و مقادیر واقعی رو توش بذار
+
+cat > wrangler.toml << 'EOF'
+name = "iraf-live-news-dev"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "POSTS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+EOF
+
 npx wrangler pages dev --kv POSTS -- npm run dev
 ```
+
+این فایل تو `.gitignore` هست و هیچ‌وقت push نمی‌شه.
+
 > نکته: چون تلگرام برای وبهوک به یک آدرس عمومی (HTTPS) نیاز داره، تست کامل وبهوک
 > فقط بعد از دیپلوی روی Cloudflare ممکنه؛ برای تست محلی می‌تونی مستقیماً با curl
 > یک آپدیت نمونه به `/api/telegram-webhook` بفرستی.
