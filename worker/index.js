@@ -4,6 +4,10 @@
 const KV_KEY = 'posts';
 const MAX_STORED_POSTS = 60;
 
+// فقط پیام‌هایی که این هشتگ رو داشته باشن ذخیره می‌شن.
+// اگه بعداً خواستی چند هشتگ رو قبول کنی، می‌تونی این رو به آرایه تبدیل کنی.
+const REQUIRED_HASHTAG = '#اربعین';
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -46,6 +50,16 @@ async function handleWebhook(request, env) {
 
   const text = msg.text || msg.caption || '';
 
+  // فیلتر هشتگ: اگه پیام هشتگ موردنظر رو نداشته باشه، اصلاً ذخیره نمی‌کنیم.
+  // (برای پیام‌های ویرایش‌شده هم همین قانون اعمال می‌شه: اگه هشتگ حذف شده باشه، از KV پاک می‌شه)
+  if (!hasRequiredHashtag(text)) {
+    if (update.edited_channel_post) {
+      await removePostIfExists(env, `${msg.chat.id}_${msg.message_id}`);
+    }
+    return new Response('OK - filtered out (no hashtag)', { status: 200 });
+  }
+
+
   let photoFileId = null;
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
     photoFileId = msg.photo[msg.photo.length - 1].file_id;
@@ -82,6 +96,24 @@ async function handleWebhook(request, env) {
   await env.POSTS.put(KV_KEY, JSON.stringify(list));
 
   return new Response('OK', { status: 200 });
+}
+
+function hasRequiredHashtag(text) {
+  if (!text) return false;
+  // نرمال‌سازی ساده برای پرهیز از مشکل کاراکترهای مشابه فارسی/عربی (ی/ي، ک/ك)
+  const normalize = (s) => s.replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+  return normalize(text).includes(normalize(REQUIRED_HASHTAG));
+}
+
+async function removePostIfExists(env, postId) {
+  const existingRaw = await env.POSTS.get(KV_KEY);
+  if (!existingRaw) return;
+  let list = [];
+  try { list = JSON.parse(existingRaw); } catch { return; }
+  const filtered = list.filter((p) => p.id !== postId);
+  if (filtered.length !== list.length) {
+    await env.POSTS.put(KV_KEY, JSON.stringify(filtered));
+  }
 }
 
 async function handlePosts(env) {

@@ -13,4 +13,4 @@ binding = "ASSETS"
 # `wrangler kv namespace create POSTS`)، آیدی‌ش رو اینجا جایگزین کن.
 [[kv_namespaces]]
 binding = "POSTS"
-id = "440939d73b0c4b81b5616a1d298dc47e"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
