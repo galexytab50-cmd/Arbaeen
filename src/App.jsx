@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Newspaper, RefreshCw, ExternalLink, ImageOff, WifiOff, Loader2 } from 'lucide-react';
 
 /* ---------------------------------------------------------------------
-   هویت بصری — همسو با «مرکز رصد ایراف»
+هویت بصری — داشبورد زنده اخبار اربعین
 --------------------------------------------------------------------- */
 const C = {
   bg: '#FFFFFF',
