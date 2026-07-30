@@ -1,0 +1,9 @@
+name = "iraf-live-news"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# بعد از ساختن KV Namespace در داشبورد Cloudflare (یا با دستور
+# `wrangler kv namespace create POSTS`)، آیدی‌ش رو اینجا جایگزین کن.
+[[kv_namespaces]]
+binding = "POSTS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
