@@ -1,22 +1,25 @@
 # پوشش زنده اخبار (ایراف)
 
 اپلیکیشن سبک React که پست‌های یک کانال تلگرامی رو به‌صورت زنده نمایش می‌ده.
-بک‌اند با **Cloudflare Pages Functions** + **Cloudflare KV** ساخته شده — یعنی
-نیازی به سرور جدا نیست و همه‌چیز روی Cloudflare اجرا می‌شه.
+بک‌اند به‌صورت یک **Cloudflare Worker واحد** (با static assets + KV) نوشته شده —
+همون پلتفرم یکپارچه‌ی جدید Cloudflare (Workers + Assets)، نه Pages قدیمی.
 
 ## چطور کار می‌کنه؟
 
 ```
-کانال تلگرام → (پست جدید) → Telegram Webhook → /api/telegram-webhook
+کانال تلگرام → (پست جدید) → Telegram Webhook → POST /api/telegram-webhook
                                                         ↓
                                                   ذخیره در Cloudflare KV
                                                         ↓
-مرورگر کاربر ← JSON ← /api/telegram-posts ←──────────────┘
+مرورگر کاربر ← JSON ← GET /api/telegram-posts ←──────────┘
+
+هر درخواست دیگه (/, /assets/...) → مستقیم از dist/ (فایل‌های ساخته‌شده با Vite) سرو می‌شه
 ```
 
-ربات تلگرامی که ادمین کانال می‌کنی، به‌ازای هر پست جدید یک درخواست POST
-به آدرس `/api/telegram-webhook` می‌فرسته. این تابع پیام رو در KV ذخیره می‌کنه.
-صفحه‌ی اصلی هر ۴۵ ثانیه از `/api/telegram-posts` لیست به‌روز رو می‌گیره.
+همه‌چیز — هم API و هم فایل‌های استاتیک سایت — از یک Worker واحد (`worker/index.js`)
+سرو می‌شه. مسیریابی داخل خودِ کد Worker انجام می‌شه: اگه آدرس با `/api/` شروع بشه
+پردازش می‌کنیم، وگرنه به `env.ASSETS.fetch()` می‌سپاریم که فایل‌های ساخته‌شده‌ی
+Vite رو تحویل بده.
 
 ---
 
@@ -26,10 +29,31 @@
 ۲. یک اسم و یوزرنیم برای ربات انتخاب کن. در پایان یک **توکن** به این شکل می‌گیری:
    `123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
    این توکن رو نگه دار (بعداً به‌عنوان `BOT_TOKEN` لازمت می‌شه).
-۳. وارد کانال تلگرامی‌ات شو → **Administrators** → ربات رو به‌عنوان **ادمین** اضافه کن
-   (فقط دسترسی «Post Messages» یا حتی بدون هیچ دسترسی خاصی کافیه، ربات فقط باید عضو ادمین باشه تا آپدیت پست‌ها رو ببینه).
+۳. وارد کانال تلگرامی‌ات شو → **Administrators** → ربات رو به‌عنوان **ادمین** اضافه کن.
 
-## مرحله ۲ — آپلود پروژه در گیت‌هاب
+## مرحله ۲ — ساخت KV Namespace
+
+۱. در داشبورد [Cloudflare](https://dash.cloudflare.com) → **Workers & Pages** → تب **KV**
+۲. **Create a namespace** → اسمش رو بذار `POSTS` → **Add**
+۳. روی namespace ساخته‌شده کلیک کن و **آیدی‌ش رو کپی کن** (یه رشته‌ی طولانی شبیه `a1b2c3...`)
+
+## مرحله ۳ — تنظیم wrangler.toml
+
+فایل `wrangler.toml` تو ریشه‌ی پروژه رو باز کن و دو جا رو ویرایش کن:
+
+```toml
+name = "arbaeen"   # <-- دقیقاً همون اسمی بذار که پروژه‌ت تو داشبورد Cloudflare داره
+
+[[kv_namespaces]]
+binding = "POSTS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"   # <-- آیدی که تو مرحله ۲ کپی کردی
+```
+
+> ⚠️ این فایل باید حتماً commit و push بشه — برخلاف پروژه‌های Pages قدیمی،
+> اینجا Cloudflare تنظیمات (KV binding، اسم Worker، مسیر assets) رو مستقیم از
+> همین فایل می‌خونه.
+
+## مرحله ۴ — آپلود در گیت‌هاب
 
 ```bash
 cd iraf-news
@@ -41,91 +65,71 @@ git remote add origin https://github.com/USERNAME/REPO.git
 git push -u origin main
 ```
 
-## مرحله ۳ — ساخت پروژه در Cloudflare Pages
-
-۱. وارد داشبورد [Cloudflare](https://dash.cloudflare.com) شو → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-۲. ریپوی گیت‌هابت رو انتخاب کن.
-۳. تنظیمات build:
-   - **Framework preset:** Vite
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-۴. روی **Save and Deploy** بزن (اولین دیپلوی خطای ۵۰۰ می‌ده چون هنوز KV و env variable وصل نکردیم — طبیعیه، مرحله بعد درستش می‌کنیم).
-
-## مرحله ۴ — ساخت KV Namespace و اتصالش
-
-۱. در داشبورد Cloudflare → **Workers & Pages** → **KV** → **Create a namespace** → اسمش رو بذار `POSTS`.
-۲. برگرد به پروژه‌ی Pages‌ات → **Settings** → **Functions** → **KV namespace bindings** → **Add binding**:
-   - **Variable name:** `POSTS`
-   - **KV namespace:** همون `POSTS` که ساختی
-
-## مرحله ۵ — تنظیم متغیرهای محیطی
-
-در همون پروژه‌ی Pages → **Settings** → **Environment variables** → **Add variable** (برای Production و در صورت نیاز Preview):
-
-| نام | مقدار |
-|---|---|
-| `BOT_TOKEN` | توکنی که از BotFather گرفتی |
-| `WEBHOOK_SECRET` | یک رشته‌ی تصادفی و طولانی خودت بساز (مثلاً با `openssl rand -hex 32`) — این برای امن‌کردن endpoint وبهوکه |
-
-بعد از اضافه‌کردن، یک بار دیگه از تب **Deployments** روی **Retry deployment** بزن تا متغیرها اعمال بشن.
-
-## مرحله ۶ — وصل‌کردن وبهوک تلگرام
-
-بعد از دیپلوی موفق، آدرس سایتت چیزی شبیه `https://iraf-live-news.pages.dev` می‌شه.
-حالا با یکی از این دو روش وبهوک رو تنظیم کن (فقط یک‌بار لازمه):
-
-**با curl (در ترمینال):**
+اگه از قبل یه ریپو داری و فقط می‌خوای این نسخه رو جایگزین کنی:
 ```bash
-curl -F "url=https://YOUR-PROJECT.pages.dev/api/telegram-webhook" \
-     -F "secret_token=YOUR_WEBHOOK_SECRET" \
-     "https://api.telegram.org/bot YOUR_BOT_TOKEN/setWebhook"
-```
-(فاصله‌ی بعد از `bot` رو حذف کن، اینجا فقط برای خوانایی گذاشته شده.)
-
-**یا مستقیم در مرورگر** (لینک زیر رو با مقادیر خودت پر کن و باز کن):
-```
-https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook?url=https://YOUR-PROJECT.pages.dev/api/telegram-webhook&secret_token=YOUR_WEBHOOK_SECRET
+# محتوای پوشه‌ی iraf-news رو بریز رو ریپوی قبلی، بعد:
+git add .
+git commit -m "بازسازی به‌صورت Worker واحد"
+git push
 ```
 
-اگه جواب `{"ok":true,"result":true,...}` گرفتی یعنی وصل شد. برای بررسی وضعیت هر زمان:
+## مرحله ۵ — ساخت/تنظیم پروژه در Cloudflare
+
+اگه پروژه از قبل تو Cloudflare (Workers & Pages) وصل به این ریپوعه، همین که push کنی
+خودش دوباره دیپلوی می‌شه. اگه از صفر می‌سازی:
+
+۱. داشبورد Cloudflare → **Workers & Pages** → **Create** → **Import a repository** (یا مسیر مشابه برای Workers)
+۲. ریپوی گیت‌هابت رو انتخاب کن.
+۳. Build command: `npm run build` (باید از قبل خودکار تشخیص داده بشه چون Vite هست)
+۴. Deploy رو بزن.
+
+## مرحله ۶ — تنظیم متغیرهای محیطی (Secrets)
+
+تو پروژه‌ی Worker خودت در داشبورد → **Settings** → **Variables and Secrets** → **Add**:
+
+| نام | نوع | مقدار |
+|---|---|---|
+| `BOT_TOKEN` | Secret | توکنی که از BotFather گرفتی |
+| `WEBHOOK_SECRET` | Secret | یک رشته‌ی تصادفی و طولانی خودت بساز (مثلاً با `openssl rand -hex 32`) |
+
+بعد از اضافه‌کردن، یه بار از **Deployments** روی **Retry deployment** بزن (یا فقط یه commit خالی push کن) تا اعمال بشه.
+
+## مرحله ۷ — وصل‌کردن وبهوک تلگرام
+
+آدرس Workerت چیزی شبیه `https://arbaeen.YOUR-SUBDOMAIN.workers.dev` یا دامنه‌ی سفارشی‌خودته.
+این لینک رو با مقادیر خودت پر کن و تو مرورگر باز کن:
+
+```
+https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook?url=https://YOUR-WORKER-URL/api/telegram-webhook&secret_token=YOUR_WEBHOOK_SECRET
+```
+
+جواب موفق: `{"ok":true,"result":true,...}`
+
+برای بررسی وضعیت هر زمان:
 ```
 https://api.telegram.org/botYOUR_BOT_TOKEN/getWebhookInfo
 ```
 
-## مرحله ۷ — تست
+## مرحله ۸ — تست
 
-یک پیام (متن یا عکس) در کانال تلگرامی‌ات پست کن. تا ۱ دقیقه بعد باید در سایتت
-(زیر تب پوشش زنده) ظاهر بشه.
+یک پیام (متن یا عکس) در کانال تلگرامی‌ات پست کن. تا ۱ دقیقه بعد باید در سایتت ظاهر بشه.
 
 ---
 
 ## توسعه‌ی محلی (اختیاری)
 
-> ⚠️ فایل `wrangler.toml` عمداً تو ریپو نیست — چون اگه موقع دیپلوی از طریق گیت‌هاب
-> تو ریپو باشه، Cloudflare Pages به‌اشتباه سعی می‌کنه با `wrangler deploy` (مخصوص
-> Workers) دیپلوی کنه و خطا می‌ده. تنظیمات production (KV binding، env variables)
-> رو طبق مراحل ۴ و ۵ بالا، مستقیم تو داشبورد Cloudflare انجام بده، نه با این فایل.
-
-برای تست محلی، یه `wrangler.toml` فقط برای خودت (بدون commit‌کردن) بساز:
-
 ```bash
 npm install
-cp .dev.vars.example .dev.vars   # و مقادیر واقعی رو توش بذار
-
-cat > wrangler.toml << 'EOF'
-name = "iraf-live-news-dev"
-compatibility_date = "2024-09-23"
-pages_build_output_dir = "dist"
-
-[[kv_namespaces]]
-binding = "POSTS"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-EOF
-
-npx wrangler pages dev --kv POSTS -- npm run dev
+cp .dev.vars.example .dev.vars   # BOT_TOKEN و WEBHOOK_SECRET واقعی رو توش بذار
+npm run build
+npx wrangler dev
 ```
-
-این فایل تو `.gitignore` هست و هیچ‌وقت push نمی‌شه.
+سایت روی `http://localhost:8787` بالا میاد (هم API و هم فایل‌های استاتیک).
+اگه می‌خوای هم‌زمان با hot-reload ویرایش UI کار کنی:
+```bash
+npx wrangler dev &     # بک‌اند روی 8787
+npm run dev             # فرانت‌اند Vite روی 5173 با پروکسی /api به 8787
+```
 
 > نکته: چون تلگرام برای وبهوک به یک آدرس عمومی (HTTPS) نیاز داره، تست کامل وبهوک
 > فقط بعد از دیپلوی روی Cloudflare ممکنه؛ برای تست محلی می‌تونی مستقیماً با curl
@@ -140,11 +144,9 @@ iraf-news/
 ├── src/
 │   ├── App.jsx          ← رابط کاربری پوشش زنده اخبار
 │   └── main.jsx
-├── functions/api/
-│   ├── telegram-webhook.js   ← دریافت پست جدید از تلگرام و ذخیره در KV
-│   ├── telegram-posts.js     ← تحویل لیست پست‌ها به فرانت‌اند
-│   └── telegram-media.js     ← پروکسی امن برای نمایش عکس‌ها
-├── wrangler.toml
+├── worker/
+│   └── index.js          ← کل بک‌اند: وبهوک تلگرام، تحویل پست‌ها، پروکسی عکس، سرو استاتیک
+├── wrangler.toml          ← تنظیمات Worker (اسم، KV binding، مسیر assets) — باید commit بشه
 └── package.json
 ```
 
