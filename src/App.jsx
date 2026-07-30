@@ -164,7 +164,7 @@ export default function App() {
               <Newspaper size={19} />
             </div>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 800 }}>پوشش زنده اخبار</div>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>داشبورد زنده اخبار اربعین</div>
               <div style={{ fontSize: 11.5, color: C.textFaint }}>
                 {lastUpdated ? `آخرین به‌روزرسانی: ${lastUpdated.toLocaleTimeString('fa-IR')}` : 'در حال بارگذاری...'}
               </div>
