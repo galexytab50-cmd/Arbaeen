@@ -1,6 +1,3 @@
-# این فایل الان ضروریه و باید commit بشه (برخلاف قبل).
-# «name» رو با اسم دقیق پروژه‌ای که تو داشبورد Cloudflare ساختی یکی کن
-# (تو لاگ آخرت این‌طور مشخص بود: arbaeen). اگه اسم پروژه‌ت چیز دیگه‌ایه، همینجا عوضش کن.
 name = "arbaeen"
 main = "worker/index.js"
 compatibility_date = "2025-01-01"
@@ -9,8 +6,11 @@ compatibility_date = "2025-01-01"
 directory = "./dist"
 binding = "ASSETS"
 
-# بعد از ساختن KV Namespace به اسم POSTS (از داشبورد Cloudflare یا با
-# `wrangler kv namespace create POSTS`)، آیدی‌ش رو اینجا جایگزین کن.
 [[kv_namespaces]]
 binding = "POSTS"
 id = "440939d73b0c4b81b5616a1d298dc47e"
+
+# اجرای خودکار گزارش عملیات روانی: هر روز ساعت ۰۹:۰۰ و ۲۱:۰۰ UTC
+# که برابر است با ۱۲:۰۰ ظهر و ۰۰:۰۰ نیمه‌شب به وقت عراق (UTC+3، بدون تغییر ساعت تابستانی)
+[triggers]
+crons = ["0 9,21 * * *"]
