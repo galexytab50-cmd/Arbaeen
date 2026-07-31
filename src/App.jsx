@@ -294,6 +294,8 @@ function ReportSection({ title, children }) {
 function PsyopTab() {
   const [report, setReport] = useState(null);
   const [status, setStatus] = useState('loading');
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState(null);
 
   const load = async () => {
     setStatus('loading');
@@ -313,22 +315,47 @@ function PsyopTab() {
 
   useEffect(() => { load(); }, []);
 
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const res = await fetch('/api/psyop-report/generate', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok && data.report) {
+        setReport(data.report);
+        setStatus('ready');
+      } else {
+        setGenerateError(data.error || 'خطا در تولید گزارش.');
+      }
+    } catch (e) {
+      setGenerateError('ارتباط با سرور برقرار نشد.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
         <span style={{ fontSize: 11.5, color: C.textFaint, display: 'flex', alignItems: 'center', gap: 6 }}>
           <ShieldAlert size={14} color={C.maroon} />
-          گزارش خودکار — هر روز ساعت ۱۲ ظهر و ۰۰:۰۰ به‌وقت عراق
+          گزارش اخبار امروز، از نیمه‌شب (وقت عراق) تا لحظه‌ی تولید گزارش
         </span>
-        <button className="iraf-refresh-btn" onClick={load}>
-          <RefreshCw size={13} />
-          بروزرسانی
+        <button className="iraf-refresh-btn" onClick={handleGenerate} disabled={generating}>
+          <RefreshCw size={13} style={generating ? { animation: 'iraf-spin 1s linear infinite' } : undefined} />
+          {generating ? 'در حال تولید گزارش...' : 'تولید گزارش'}
         </button>
       </div>
 
+      {generateError && (
+        <div className="iraf-card" style={{ padding: '10px 14px', marginBottom: 16, background: C.maroonSoft, borderColor: C.maroonSoft, fontSize: 12.5, color: C.maroon, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={14} /> {generateError}
+        </div>
+      )}
+
       {status === 'loading' && <StateBlock icon={<Loader2 size={22} style={{ animation: 'iraf-spin 1s linear infinite' }} />} text="در حال دریافت گزارش..." />}
       {status === 'error' && <StateBlock icon={<WifiOff size={22} />} text="ارتباط با سرور برقرار نشد." color={C.maroon} />}
-      {status === 'empty' && <StateBlock icon={<ShieldAlert size={22} />} text="هنوز هیچ گزارشی تولید نشده. اولین گزارش در نوبت بعدی (ظهر یا نیمه‌شب عراق) ساخته می‌شود." />}
+      {status === 'empty' && <StateBlock icon={<ShieldAlert size={22} />} text="هنوز هیچ گزارشی تولید نشده. روی دکمه‌ی «تولید گزارش» بزن." />}
 
       {status === 'ready' && report && (
         <div>
