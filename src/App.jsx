@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
 import {
   Newspaper, RefreshCw, ExternalLink, ImageOff, WifiOff, Loader2,
-  Archive, ShieldAlert, CalendarDays, Hash, AlertTriangle,
+  Archive, ShieldAlert, CalendarDays, Hash, AlertTriangle, Image as ImageIcon, Download,
 } from 'lucide-react';
 
 /* ---------------------------------------------------------------------
@@ -432,12 +433,219 @@ function PsyopTab() {
 }
 
 /* ---------------------------------------------------------------------
+   تب ۴ — اینفوگرافیک (خروجی JPEG از گزارش عملیات روانی، بدون هیچ API بیرونی)
+--------------------------------------------------------------------- */
+function PosterBar({ word, count, max }) {
+  const pct = Math.max(6, Math.round((count / max) * 100));
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+      <span style={{ fontSize: 12, width: 90, flexShrink: 0, textAlign: 'left', color: C.textMuted }}>
+        {count.toLocaleString('fa-IR')}
+      </span>
+      <div style={{ flex: 1, background: C.surface2, borderRadius: 6, overflow: 'hidden', height: 16 }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: C.gold, borderRadius: 6 }} />
+      </div>
+      <span style={{ fontSize: 12.5, width: 90, flexShrink: 0, fontWeight: 700 }}>{word}</span>
+    </div>
+  );
+}
+
+function InfographicTab() {
+  const [report, setReport] = useState(null);
+  const [status, setStatus] = useState('loading');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
+  const posterRef = useRef(null);
+
+  const load = async () => {
+    setStatus('loading');
+    try {
+      const res = await fetch('/api/psyop-report');
+      const data = await res.json();
+      if (data.report) {
+        setReport(data.report);
+        setStatus('ready');
+      } else {
+        setStatus('empty');
+      }
+    } catch (e) {
+      setStatus('error');
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleDownload = async () => {
+    if (!posterRef.current || !report) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+      const canvas = await html2canvas(posterRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      });
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const dateLabel = new Date(report.generatedAt).toISOString().slice(0, 10);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `گزارش-عملیات-روانی-${dateLabel}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {
+      setExportError('ساخت فایل JPEG با خطا مواجه شد. دوباره تلاش کنید.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const maxWordCount = report && report.topWords && report.topWords.length > 0
+    ? Math.max(...report.topWords.map((w) => w.count))
+    : 1;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+        <span style={{ fontSize: 11.5, color: C.textFaint, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ImageIcon size={14} color={C.gold} />
+          اینفوگرافیک از آخرین گزارش عملیات روانی تولیدشده
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="iraf-refresh-btn" onClick={load}>
+            <RefreshCw size={13} />
+            بروزرسانی
+          </button>
+          {status === 'ready' && (
+            <button className="iraf-refresh-btn" onClick={handleDownload} disabled={exporting} style={{ background: C.gold, color: '#fff' }}>
+              <Download size={13} style={exporting ? { animation: 'iraf-spin 1s linear infinite' } : undefined} />
+              {exporting ? 'در حال ساخت...' : 'دانلود JPEG'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {exportError && (
+        <div className="iraf-card" style={{ padding: '10px 14px', marginBottom: 16, background: C.maroonSoft, borderColor: C.maroonSoft, fontSize: 12.5, color: C.maroon, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={14} /> {exportError}
+        </div>
+      )}
+
+      {status === 'loading' && <StateBlock icon={<Loader2 size={22} style={{ animation: 'iraf-spin 1s linear infinite' }} />} text="در حال دریافت گزارش..." />}
+      {status === 'error' && <StateBlock icon={<WifiOff size={22} />} text="ارتباط با سرور برقرار نشد." color={C.maroon} />}
+      {status === 'empty' && <StateBlock icon={<ImageIcon size={22} />} text="هنوز گزارشی وجود نداره. اول از تب «عملیات روانی» یه گزارش بساز." />}
+
+      {status === 'ready' && report && (
+        <div style={{ display: 'flex', justifyContent: 'center', overflowX: 'auto', padding: '8px 0' }}>
+          <div
+            ref={posterRef}
+            style={{
+              width: 760, background: '#FFFFFF', padding: '34px 38px', direction: 'rtl',
+              fontFamily: "'Vazirmatn', sans-serif", border: `1px solid ${C.border}`,
+            }}
+          >
+            {/* سربرگ پوستر */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `3px solid ${C.gold}`, paddingBottom: 16, marginBottom: 24 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.gold }}>گزارش عملیات روانی</div>
+                <div style={{ fontSize: 12.5, color: C.textFaint, marginTop: 4 }}>داشبورد زنده اخبار اربعین</div>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <div className="iraf-mono" style={{ fontSize: 11, color: C.textFaint }}>
+                  {new Date(report.generatedAt).toLocaleDateString('fa-IR')}
+                </div>
+                <div className="iraf-mono" style={{ fontSize: 11, color: C.textFaint }}>
+                  {new Date(report.generatedAt).toLocaleTimeString('fa-IR')}
+                </div>
+              </div>
+            </div>
+
+            {/* تعداد اخبار */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 26 }}>
+              <div style={{ flex: 1, background: C.goldSoft, borderRadius: 10, padding: '16px 18px', textAlign: 'center' }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: C.gold }}>{report.newsCount.toLocaleString('fa-IR')}</div>
+                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>خبر بررسی‌شده</div>
+              </div>
+              <div style={{ flex: 1, background: C.maroonSoft, borderRadius: 10, padding: '16px 18px', textAlign: 'center' }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: C.maroon }}>{(report.techniques || []).length.toLocaleString('fa-IR')}</div>
+                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>تکنیک شناسایی‌شده</div>
+              </div>
+              <div style={{ flex: 1, background: C.surface2, borderRadius: 10, padding: '16px 18px', textAlign: 'center' }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: C.text }}>{(report.topWords || []).length.toLocaleString('fa-IR')}</div>
+                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>کلمه‌ی پرتکرار</div>
+              </div>
+            </div>
+
+            {/* خلاصه‌ی مدیریتی */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 8 }}>خلاصه‌ی مدیریتی</div>
+              <div style={{ fontSize: 12.5, lineHeight: 2, background: C.surface2, borderRadius: 8, padding: '12px 14px' }}>
+                {report.summary || 'خلاصه‌ای ثبت نشده است.'}
+              </div>
+            </div>
+
+            {/* ۵ خبر مهم */}
+            {report.top5News && report.top5News.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 8 }}>۵ خبر مهم این بازه</div>
+                <div>
+                  {report.top5News.map((n, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12, lineHeight: 1.9 }}>
+                      <span style={{ color: C.gold, fontWeight: 800, flexShrink: 0 }}>{(i + 1).toLocaleString('fa-IR')}.</span>
+                      <span>{n}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* تکنیک‌های عملیات روانی */}
+            {report.techniques && report.techniques.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 8, color: C.maroon }}>تکنیک‌های عملیات روانی شناسایی‌شده</div>
+                <div>
+                  {report.techniques.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 6, fontSize: 11.5, lineHeight: 1.9 }}>
+                      <span style={{ color: C.maroon, flexShrink: 0 }}>▸</span>
+                      <span>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* پرتکرارترین کلمات - نمودار میله‌ای */}
+            {report.topWords && report.topWords.length > 0 && (
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 10 }}>پرتکرارترین کلمات</div>
+                {report.topWords.slice(0, 10).map((w, i) => (
+                  <PosterBar key={i} word={w.word} count={w.count} max={maxWordCount} />
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginTop: 26, paddingTop: 14, borderTop: `1px solid ${C.borderSoft}`, textAlign: 'center', fontSize: 10.5, color: C.textFaint }}>
+              تولیدشده توسط داشبورد زنده اخبار اربعین
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ---------------------------------------------------------------------
    اپ اصلی — نوار تب‌ها بالای صفحه
 --------------------------------------------------------------------- */
 const TABS = [
   { key: 'live', label: 'پوشش زنده اخبار', icon: Newspaper },
   { key: 'archive', label: 'آرشیو مطالب', icon: Archive },
   { key: 'psyop', label: 'عملیات روانی', icon: ShieldAlert },
+  { key: 'infographic', label: 'اینفوگرافیک', icon: ImageIcon },
 ];
 
 export default function App() {
@@ -476,6 +684,7 @@ export default function App() {
         {activeTab === 'live' && <LiveTab />}
         {activeTab === 'archive' && <ArchiveTab />}
         {activeTab === 'psyop' && <PsyopTab />}
+        {activeTab === 'infographic' && <InfographicTab />}
       </main>
     </div>
   );
