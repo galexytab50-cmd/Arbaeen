@@ -1,35 +1,65 @@
 // نقطه‌ی ورود اصلی Worker.
 // درخواست‌های /api/* رو خودمون هندل می‌کنیم و بقیه رو به فایل‌های استاتیک (dist) می‌سپاریم.
+// همچنین یک هندلر scheduled داریم که با Cron Trigger هر روز دوبار (ظهر و نیمه‌شب عراق) اجرا می‌شه.
 
 const KV_KEY = 'posts';
-const MAX_STORED_POSTS = 60;
+const MAX_STORED_POSTS = 5000; // سقف فنی برای جلوگیری از رشد بی‌رویه‌ی KV؛ عملاً نامحدود
 
 // فقط پیام‌هایی که این هشتگ رو داشته باشن ذخیره می‌شن.
-// اگه بعداً خواستی چند هشتگ رو قبول کنی، می‌تونی این رو به آرایه تبدیل کنی.
 const REQUIRED_HASHTAG = '#اربعین';
+
+const PERSIAN_ONLY_CHARS = /[پچژگ]/;
+
+const STOPWORDS = new Set([
+  'و', 'در', 'به', 'از', 'که', 'این', 'را', 'با', 'است', 'برای', 'آن', 'یک', 'هم', 'تا', 'یا',
+  'های', 'شد', 'شده', 'کرد', 'می', 'کند', 'ها', 'اما', 'نیز', 'هر', 'بر', 'بود', 'باشد', 'دارد',
+  'داشت', 'او', 'ما', 'شما', 'آنها', 'چه', 'چون', 'اگر', 'پس', 'بی', 'بین', 'روی', 'زیر', 'چند',
+  'همه', 'دیگر', 'خود', 'کنند', 'کرده', 'گفت', 'گفته', 'بعد', 'قبل', 'هنوز', 'فقط', 'باید',
+  'نباید', 'کنیم', 'شود', 'ولی', 'یعنی', 'خواهد', 'کنید', 'شدند', 'کردند', 'کنیم', 'ایم', 'اند',
+]);
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const path = url.pathname;
 
-    if (url.pathname === '/api/telegram-webhook') {
+    if (path === '/api/telegram-webhook') {
       if (request.method === 'POST') return handleWebhook(request, env);
       return new Response('Telegram webhook is alive. Use POST.', { status: 200 });
     }
 
-    if (url.pathname === '/api/telegram-posts' && request.method === 'GET') {
+    if (path === '/api/telegram-posts' && request.method === 'GET') {
       return handlePosts(env);
     }
 
-    if (url.pathname === '/api/telegram-media' && request.method === 'GET') {
+    if (path === '/api/telegram-media' && request.method === 'GET') {
       return handleMedia(request, env);
+    }
+
+    if (path === '/api/archive' && request.method === 'GET') {
+      return handleArchive(request, env);
+    }
+
+    if (path === '/api/psyop-report' && request.method === 'GET') {
+      return handlePsyopReportGet(env);
+    }
+
+    if (path === '/api/psyop-report/generate' && request.method === 'POST') {
+      return handlePsyopReportGenerate(request, env);
     }
 
     // هر درخواست دیگه‌ای -> فایل‌های استاتیک ساخته‌شده توسط Vite (پوشه‌ی dist)
     return env.ASSETS.fetch(request);
   },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(generatePsyopReport(env));
+  },
 };
 
+/* -------------------------------------------------------------------
+   وبهوک تلگرام: دریافت پست جدید، فیلتر هشتگ + زبان، ذخیره در KV
+------------------------------------------------------------------- */
 async function handleWebhook(request, env) {
   const secretHeader = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
   if (!env.WEBHOOK_SECRET || secretHeader !== env.WEBHOOK_SECRET) {
@@ -50,15 +80,14 @@ async function handleWebhook(request, env) {
 
   const text = msg.text || msg.caption || '';
 
-  // فیلتر هشتگ: اگه پیام هشتگ موردنظر رو نداشته باشه، اصلاً ذخیره نمی‌کنیم.
-  // (برای پیام‌های ویرایش‌شده هم همین قانون اعمال می‌شه: اگه هشتگ حذف شده باشه، از KV پاک می‌شه)
-  if (!hasRequiredHashtag(text)) {
+  // فیلتر: هم باید هشتگ موردنظر رو داشته باشه هم متنش فارسی تشخیص داده بشه.
+  // (پست‌های عربی یا بدون هشتگ اصلاً ذخیره نمی‌شن)
+  if (!hasRequiredHashtag(text) || !isPersianText(text)) {
     if (update.edited_channel_post) {
       await removePostIfExists(env, `${msg.chat.id}_${msg.message_id}`);
     }
-    return new Response('OK - filtered out (no hashtag)', { status: 200 });
+    return new Response('OK - filtered out', { status: 200 });
   }
-
 
   let photoFileId = null;
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
@@ -100,9 +129,22 @@ async function handleWebhook(request, env) {
 
 function hasRequiredHashtag(text) {
   if (!text) return false;
-  // نرمال‌سازی ساده برای پرهیز از مشکل کاراکترهای مشابه فارسی/عربی (ی/ي، ک/ك)
   const normalize = (s) => s.replace(/ي/g, 'ی').replace(/ك/g, 'ک');
   return normalize(text).includes(normalize(REQUIRED_HASHTAG));
+}
+
+// تشخیص فارسی بودن متن: اگه حروف اختصاصی فارسی (پ چ ژ گ) توش بود، قطعاً فارسیه.
+// در غیر این صورت، نسبت فرم فارسی حروف (ی/ک) به فرم عربی (ي/ك) رو مقایسه می‌کنیم.
+function isPersianText(text) {
+  if (!text) return false;
+  if (PERSIAN_ONLY_CHARS.test(text)) return true;
+
+  const persianSignal = (text.match(/ی/g) || []).length + (text.match(/ک/g) || []).length;
+  const arabicSignal = (text.match(/ي/g) || []).length + (text.match(/ك/g) || []).length;
+
+  if (persianSignal > arabicSignal) return true;
+  if (arabicSignal > persianSignal) return false;
+  return true; // حالت مبهم (متن خیلی کوتاه) -> رد نکن
 }
 
 async function removePostIfExists(env, postId) {
@@ -116,6 +158,9 @@ async function removePostIfExists(env, postId) {
   }
 }
 
+/* -------------------------------------------------------------------
+   تب «پوشش زنده اخبار» - همه‌ی پست‌ها، بدون محدودیت نمایشی
+------------------------------------------------------------------- */
 async function handlePosts(env) {
   const raw = await env.POSTS.get(KV_KEY);
   let posts = [];
@@ -132,6 +177,216 @@ async function handlePosts(env) {
   });
 }
 
+/* -------------------------------------------------------------------
+   تب «آرشیو مطالب» - فیلتر بر اساس تاریخ (به وقت عراق، UTC+3)
+------------------------------------------------------------------- */
+function toIraqDateString(dateMs) {
+  const iraqMs = dateMs + 3 * 60 * 60 * 1000;
+  const d = new Date(iraqMs);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+async function handleArchive(request, env) {
+  const url = new URL(request.url);
+  const dateParam = url.searchParams.get('date'); // فرمت مورد انتظار: YYYY-MM-DD
+
+  if (!dateParam) {
+    return new Response(JSON.stringify({ posts: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+  }
+
+  const raw = await env.POSTS.get(KV_KEY);
+  const allPosts = raw ? JSON.parse(raw) : [];
+  const matched = allPosts.filter((p) => toIraqDateString(p.date) === dateParam);
+
+  return new Response(JSON.stringify({ posts: matched }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/* -------------------------------------------------------------------
+   تب «عملیات روانی» - گزارش خودکار (زمان‌بندی‌شده) + endpoint دستی برای تست
+------------------------------------------------------------------- */
+async function handlePsyopReportGet(env) {
+  const raw = await env.POSTS.get('psyop_report_latest');
+  const report = raw ? JSON.parse(raw) : null;
+
+  return new Response(JSON.stringify({ report }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+// endpoint دستی برای تست فوری (بدون نیاز به صبرکردن تا نوبت بعدی cron)
+// با همون WEBHOOK_SECRET محافظت می‌شه.
+async function handlePsyopReportGenerate(request, env) {
+  const secretHeader = request.headers.get('X-Webhook-Secret');
+  if (!env.WEBHOOK_SECRET || secretHeader !== env.WEBHOOK_SECRET) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const report = await generatePsyopReport(env);
+  return new Response(JSON.stringify({ ok: true, report }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
+
+async function generatePsyopReport(env) {
+  const raw = await env.POSTS.get(KV_KEY);
+  const allPosts = raw ? JSON.parse(raw) : [];
+
+  const now = Date.now();
+  const periodStart = now - 12 * 60 * 60 * 1000; // ۱۲ ساعت اخیر (از نوبت قبلی گزارش)
+  const periodPosts = allPosts.filter((p) => p.date >= periodStart && p.date <= now);
+
+  const topWords = computeTopWords(periodPosts);
+  const ai = await callDeepSeekReport(env, periodPosts);
+
+  const report = {
+    generatedAt: now,
+    periodStart,
+    periodEnd: now,
+    newsCount: periodPosts.length,
+    topWords,
+    summary: ai.summary,
+    techniques: ai.techniques,
+    importantNews: ai.importantNews,
+    top5News: ai.top5News,
+  };
+
+  await env.POSTS.put('psyop_report_latest', JSON.stringify(report));
+
+  // یه تاریخچه‌ی کوتاه هم نگه می‌داریم (برای توسعه‌های بعدی)
+  const historyRaw = await env.POSTS.get('psyop_report_history');
+  let history = [];
+  if (historyRaw) {
+    try { history = JSON.parse(historyRaw); } catch { history = []; }
+  }
+  history.unshift({ generatedAt: now, newsCount: report.newsCount, summary: report.summary });
+  history = history.slice(0, 30);
+  await env.POSTS.put('psyop_report_history', JSON.stringify(history));
+
+  return report;
+}
+
+// شمارش کلمات پرتکرار - محاسبه‌ی برنامه‌نویسی‌شده (نه با AI) برای دقت بیشتر.
+// هشتگ‌ها و لینک‌ها حذف می‌شن و کلمات توقف (حروف اضافه و ربط رایج) هم حساب نمی‌شن.
+function computeTopWords(posts, limit = 15) {
+  const freq = new Map();
+
+  for (const p of posts) {
+    const text = p.text || '';
+    const withoutHashtags = text.replace(/#\S+/g, ' ');
+    const withoutUrls = withoutHashtags.replace(/https?:\/\/\S+/g, ' ');
+    const words = withoutUrls.match(/[\u0600-\u06FF]{2,}/g) || [];
+
+    for (const raw of words) {
+      const w = raw.trim();
+      if (!w || STOPWORDS.has(w)) continue;
+      freq.set(w, (freq.get(w) || 0) + 1);
+    }
+  }
+
+  return Array.from(freq.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([word, count]) => ({ word, count }));
+}
+
+// بخش کیفی گزارش (تکنیک‌های عملیات روانی، اخبار مهم، ۵ خبر برتر، خلاصه‌ی مدیریتی) با API دیپ‌سیک
+async function callDeepSeekReport(env, posts) {
+  if (!env.DEEPSEEK_API_KEY) {
+    return {
+      summary: 'کلید DEEPSEEK_API_KEY تنظیم نشده است. این گزارش بدون تحلیل هوش مصنوعی تولید شده.',
+      techniques: [],
+      importantNews: [],
+      top5News: [],
+    };
+  }
+
+  if (posts.length === 0) {
+    return {
+      summary: 'در این بازه‌ی زمانی هیچ پست جدیدی ثبت نشده است.',
+      techniques: [],
+      importantNews: [],
+      top5News: [],
+    };
+  }
+
+  const sample = posts
+    .slice(0, 150)
+    .map((p, i) => `${i + 1}. ${(p.text || '').slice(0, 400)}`)
+    .join('\n');
+
+  const prompt = `تو یک تحلیلگر رسانه‌ای هستی. متن زیر مجموعه‌ای از پست‌های یک کانال خبری تلگرامی درباره‌ی مراسم اربعین است.
+بر اساس این پست‌ها یک گزارش تحلیلی به زبان فارسی و فقط در قالب JSON خام (بدون هیچ توضیح اضافه، بدون markdown، بدون تیک‌بک‌کوت) با دقیقاً این ساختار تولید کن:
+
+{
+  "summary": "یک خلاصه‌ی مدیریتی در ۳ تا ۵ جمله درباره‌ی وضعیت کلی این بازه",
+  "techniques": ["فهرست تکنیک‌های احتمالی عملیات روانی که در این پست‌ها مشاهده می‌شود، هرکدام با توضیح کوتاه"],
+  "importantNews": ["مهم‌ترین اخبار و رویدادهایی که در این پست‌ها مطرح شده"],
+  "top5News": ["دقیقاً ۵ خبر مهم این بازه، به‌ترتیب اهمیت"]
+}
+
+پست‌ها:
+${sample}`;
+
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: 'تو فقط و فقط خروجی JSON معتبر تولید می‌کنی، بدون هیچ متن اضافه قبل یا بعدش.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    const data = await res.json();
+    const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!raw) throw new Error('پاسخ نامعتبر از دیپ‌سیک');
+
+    const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    return {
+      summary: parsed.summary || '',
+      techniques: Array.isArray(parsed.techniques) ? parsed.techniques : [],
+      importantNews: Array.isArray(parsed.importantNews) ? parsed.importantNews : [],
+      top5News: Array.isArray(parsed.top5News) ? parsed.top5News : [],
+    };
+  } catch (e) {
+    return {
+      summary: 'خطا در تولید گزارش با دیپ‌سیک: ' + e.message,
+      techniques: [],
+      importantNews: [],
+      top5News: [],
+    };
+  }
+}
+
+/* -------------------------------------------------------------------
+   پروکسی امن عکس‌های تلگرام
+------------------------------------------------------------------- */
 async function handleMedia(request, env) {
   const url = new URL(request.url);
   const fileId = url.searchParams.get('file_id');
