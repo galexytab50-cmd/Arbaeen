@@ -105,7 +105,6 @@ function PostCard({ post }) {
               مشاهده در تلگرام <ExternalLink size={12} />
             </a>
           )}
-        </div>
       </div>
     </div>
   );
