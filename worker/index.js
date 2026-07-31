@@ -325,6 +325,21 @@ function computeTopWords(posts, limit = 15) {
     .map(([word, count]) => ({ word, count }));
 }
 
+// کوتاه‌کردن امن متن: برخلاف String.slice، از وسط یک ایموجی یا کاراکتر دوبایتی نمی‌بره
+function safeTruncate(str, maxLen) {
+  if (!str) return '';
+  const chars = Array.from(str);
+  if (chars.length <= maxLen) return str;
+  return chars.slice(0, maxLen).join('');
+}
+
+// حذف کاراکترهای surrogate تنها (نیمه‌ایموجی‌های خراب) که باعث خرابی JSON موقع ارسال به API می‌شن
+function stripLoneSurrogates(str) {
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, (m) =>
+    m.length > 1 ? m[0] : ''
+  );
+}
+
 // بخش کیفی گزارش (تکنیک‌های عملیات روانی، اخبار مهم، ۵ خبر برتر، خلاصه‌ی مدیریتی) با API دیپ‌سیک
 async function callDeepSeekReport(env, posts) {
   if (!env.DEEPSEEK_API_KEY) {
@@ -345,10 +360,12 @@ async function callDeepSeekReport(env, posts) {
     };
   }
 
-  const sample = posts
-    .slice(0, 150)
-    .map((p, i) => `${i + 1}. ${(p.text || '').slice(0, 400)}`)
-    .join('\n');
+  const sample = stripLoneSurrogates(
+    posts
+      .slice(0, 150)
+      .map((p, i) => `${i + 1}. ${safeTruncate(p.text || '', 400)}`)
+      .join('\n')
+  );
 
   const prompt = `تو یک تحلیلگر رسانه‌ای هستی. متن زیر مجموعه‌ای از پست‌های یک کانال خبری تلگرامی درباره‌ی مراسم اربعین است.
 بر اساس این پست‌ها یک گزارش تحلیلی به زبان فارسی و فقط در قالب JSON خام (بدون هیچ توضیح اضافه، بدون markdown، بدون تیک‌بک‌کوت) با دقیقاً این ساختار تولید کن:
