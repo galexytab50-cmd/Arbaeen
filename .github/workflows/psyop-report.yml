@@ -1,0 +1,16 @@
+name: Generate Psyop Report
+
+on:
+  schedule:
+    # اجرا در ساعت 09:00 و 21:00 UTC = 12:00 ظهر و 00:00 نیمه‌شب به وقت عراق (UTC+3)
+    - cron: '0 9,21 * * *'
+  workflow_dispatch: {} # امکان اجرای دستی از تب Actions گیت‌هاب برای تست
+
+jobs:
+  trigger-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call report generation endpoint
+        run: |
+          curl -f -X POST "https://arbaeen.galexytab50.workers.dev/api/psyop-report/generate" \
+            -H "X-Webhook-Secret: ${{ secrets.WEBHOOK_SECRET }}"
