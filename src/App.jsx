@@ -65,12 +65,9 @@ function timeAgoFa(dateMs) {
   return `${diffDay.toLocaleString('fa-IR')} روز پیش`;
 }
 
-function PostCard(props) {
-  const post = props.post;
+function PostCard({ post }) {
   const [imgFailed, setImgFailed] = useState(false);
   const dateMs = new Date(post.date).getTime();
-  const timeLabel = timeAgoFa(dateMs);
-  const fullDate = new Date(post.date).toLocaleString('fa-IR');
 
   return (
     <div className="iraf-card iraf-fadeup" style={{ width: '100%' }}>
@@ -95,11 +92,16 @@ function PostCard(props) {
           </div>
         )}
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.borderSoft}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <span className="iraf-mono" style={{ fontSize: 10.5, color: C.textFaint }} title={fullDate}>
-            {timeLabel}
+          <span className="iraf-mono" style={{ fontSize: 10.5, color: C.textFaint }} title={new Date(post.date).toLocaleString('fa-IR')}>
+            {timeAgoFa(dateMs)}
           </span>
           {post.link && (
-            <a href={post.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.gold, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', fontWeight: 600 }}>
+            <a
+              href={post.link}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 11, color: C.gold, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', fontWeight: 600 }}
+            >
               مشاهده در تلگرام <ExternalLink size={12} />
             </a>
           )}
@@ -116,7 +118,7 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const cancelledRef = useRef(false);
 
-  const load = async (isManual) => {
+  const load = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
       const res = await fetch('/api/telegram-posts');
@@ -131,7 +133,7 @@ export default function App() {
       }
       setLastUpdated(new Date());
     } catch (e) {
-      if (!cancelledRef.current) setStatus(function (prev) { return prev === 'ready' ? prev : 'error'; });
+      if (!cancelledRef.current) setStatus((prev) => (prev === 'ready' ? prev : 'error'));
     } finally {
       if (isManual) setRefreshing(false);
     }
@@ -139,8 +141,8 @@ export default function App() {
 
   useEffect(() => {
     cancelledRef.current = false;
-    load(false);
-    const interval = setInterval(function () { load(false); }, POLL_INTERVAL_MS);
+    load();
+    const interval = setInterval(load, POLL_INTERVAL_MS);
     return () => { cancelledRef.current = true; clearInterval(interval); };
   }, []);
 
