@@ -1,6 +1,7 @@
 // نقطه‌ی ورود اصلی Worker.
 // درخواست‌های /api/* رو خودمون هندل می‌کنیم و بقیه رو به فایل‌های استاتیک (dist) می‌سپاریم.
-// همچنین یک هندلر scheduled داریم که با Cron Trigger هر روز دوبار (ظهر و نیمه‌شب عراق) اجرا می‌شه.
+// گزارش «عملیات روانی» دیگه خودکار/زمان‌بندی‌شده نیست — فقط با کلیک دکمه‌ی «تولید گزارش»
+// تو خودِ سایت ساخته می‌شه، و بازه‌ش «از نیمه‌شب امروز (وقت عراق) تا همین لحظه» است.
 
 const KV_KEY = 'posts';
 const MAX_STORED_POSTS = 5000; // سقف فنی برای جلوگیری از رشد بی‌رویه‌ی KV؛ عملاً نامحدود
@@ -50,10 +51,6 @@ export default {
 
     // هر درخواست دیگه‌ای -> فایل‌های استاتیک ساخته‌شده توسط Vite (پوشه‌ی dist)
     return env.ASSETS.fetch(request);
-  },
-
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(generatePsyopReport(env));
   },
 };
 
@@ -189,6 +186,16 @@ function toIraqDateString(dateMs) {
   return `${y}-${m}-${day}`;
 }
 
+// آغاز روز جاری (ساعت ۰۰:۰۰) به وقت عراق (UTC+3، بدون تغییر ساعت تابستانی)، به میلی‌ثانیه‌ی UTC
+function getIraqDayStartMs(nowMs) {
+  const iraqMs = nowMs + 3 * 60 * 60 * 1000;
+  const d = new Date(iraqMs);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const day = d.getUTCDate();
+  return Date.UTC(y, m, day, 0, 0, 0) - 3 * 60 * 60 * 1000;
+}
+
 async function handleArchive(request, env) {
   const url = new URL(request.url);
   const dateParam = url.searchParams.get('date'); // فرمت مورد انتظار: YYYY-MM-DD
@@ -214,7 +221,7 @@ async function handleArchive(request, env) {
 }
 
 /* -------------------------------------------------------------------
-   تب «عملیات روانی» - گزارش خودکار (زمان‌بندی‌شده) + endpoint دستی برای تست
+   تب «عملیات روانی» - گزارش با کلیک دکمه (بدون خودکارسازی)
 ------------------------------------------------------------------- */
 async function handlePsyopReportGet(env) {
   const raw = await env.POSTS.get('psyop_report_latest');
@@ -229,13 +236,25 @@ async function handlePsyopReportGet(env) {
   });
 }
 
-// endpoint دستی برای تست فوری (بدون نیاز به صبرکردن تا نوبت بعدی cron)
-// با همون WEBHOOK_SECRET محافظت می‌شه.
+// این endpoint از خودِ سایت (با کلیک دکمه‌ی «تولید گزارش») صدا زده می‌شه، پس عمداً
+// نیازی به secret نداره (چون تو مرورگر قابل مشاهده می‌بود). برای جلوگیری از سوءاستفاده
+// (مثلاً کلیک پشت‌سرهم که هزینه‌ی API دیپ‌سیک رو بالا ببره)، یه فاصله‌ی زمانی حداقلی می‌ذاریم.
+const GENERATE_COOLDOWN_MS = 60 * 1000; // یک دقیقه
+
 async function handlePsyopReportGenerate(request, env) {
-  const secretHeader = request.headers.get('X-Webhook-Secret');
-  if (!env.WEBHOOK_SECRET || secretHeader !== env.WEBHOOK_SECRET) {
-    return new Response('Unauthorized', { status: 401 });
+  const now = Date.now();
+  const lastRaw = await env.POSTS.get('psyop_report_last_generated_at');
+  const last = lastRaw ? parseInt(lastRaw, 10) : 0;
+
+  if (now - last < GENERATE_COOLDOWN_MS) {
+    const waitSec = Math.ceil((GENERATE_COOLDOWN_MS - (now - last)) / 1000);
+    return new Response(JSON.stringify({ ok: false, error: `لطفاً ${waitSec} ثانیه‌ی دیگر دوباره تلاش کنید.` }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
   }
+
+  await env.POSTS.put('psyop_report_last_generated_at', String(now));
 
   const report = await generatePsyopReport(env);
   return new Response(JSON.stringify({ ok: true, report }), {
@@ -249,7 +268,7 @@ async function generatePsyopReport(env) {
   const allPosts = raw ? JSON.parse(raw) : [];
 
   const now = Date.now();
-  const periodStart = now - 12 * 60 * 60 * 1000; // ۱۲ ساعت اخیر (از نوبت قبلی گزارش)
+  const periodStart = getIraqDayStartMs(now); // نیمه‌شب امروز به وقت عراق
   const periodPosts = allPosts.filter((p) => p.date >= periodStart && p.date <= now);
 
   const topWords = computeTopWords(periodPosts);
