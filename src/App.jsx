@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Newspaper, RefreshCw, ExternalLink, ImageOff, WifiOff, Loader2 } from 'lucide-react';
 
 /* ---------------------------------------------------------------------
-هویت بصری — داشبورد زنده اخبار اربعین
+   هویت بصری — داشبورد زنده اخبار اربعین
 --------------------------------------------------------------------- */
 const C = {
   bg: '#FFFFFF',
@@ -70,19 +70,19 @@ function PostCard({ post }) {
   const dateMs = new Date(post.date).getTime();
 
   return (
-    <div className="iraf-card iraf-fadeup">
+    <div className="iraf-card iraf-fadeup" style={{ width: '100%' }}>
       {post.photoUrl && !imgFailed && (
         <img
           src={post.photoUrl}
           alt=""
           loading="lazy"
           onError={() => setImgFailed(true)}
-          style={{ width: '100%', maxHeight: 360, objectFit: 'cover', display: 'block', borderBottom: `1px solid ${C.borderSoft}` }}
+          style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', display: 'block', borderBottom: `1px solid ${C.borderSoft}` }}
         />
       )}
-      <div style={{ padding: '14px 16px' }}>
+      <div style={{ padding: '13px 15px' }}>
         {post.text && (
-          <div style={{ fontSize: 14, lineHeight: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ fontSize: 13.5, lineHeight: 1.9, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {post.text}
           </div>
         )}
@@ -96,7 +96,7 @@ function PostCard({ post }) {
             {timeAgoFa(dateMs)}
           </span>
           {post.link && (
-            <a
+            
               href={post.link}
               target="_blank"
               rel="noreferrer"
@@ -151,13 +151,13 @@ export default function App() {
       <style>{FONT_IMPORT}</style>
 
       <div style={{ background: C.gold, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px' }}>
           <span style={{ width: 7, height: 7, borderRadius: 999, background: '#FFFFFF', animation: 'iraf-pulse 1.4s ease-in-out infinite', flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: '#FFFFFF', fontWeight: 600 }}>پوشش زنده — به‌روزرسانی خودکار هر ۴۵ ثانیه</span>
         </div>
       </div>
 
-      <main className="iraf-scroll iraf-main" style={{ maxWidth: 900, margin: '0 auto', padding: '26px 24px 60px' }}>
+      <main className="iraf-scroll iraf-main" style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 24px 60px' }}>
         <div className="iraf-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 38, height: 38, borderRadius: 9, background: C.goldSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.gold }}>
@@ -197,7 +197,7 @@ export default function App() {
         )}
 
         {status === 'ready' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, alignItems: 'start' }}>
             {posts.map((p) => (
               <PostCard key={p.id} post={p} />
             ))}
