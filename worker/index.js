@@ -380,9 +380,21 @@ ${sample}`;
       }),
     });
 
-    const data = await res.json();
+    const rawBody = await res.text();
+
+    if (!res.ok) {
+      throw new Error(`دیپ‌سیک خطای ${res.status} برگرداند: ${rawBody.slice(0, 300)}`);
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      throw new Error(`پاسخ دیپ‌سیک JSON معتبر نبود: ${rawBody.slice(0, 300)}`);
+    }
+
     const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if (!raw) throw new Error('پاسخ نامعتبر از دیپ‌سیک');
+    if (!raw) throw new Error('پاسخ دیپ‌سیک ساختار مورد انتظار را نداشت: ' + rawBody.slice(0, 300));
 
     const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);
