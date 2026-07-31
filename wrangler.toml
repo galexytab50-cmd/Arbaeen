@@ -10,7 +10,6 @@ binding = "ASSETS"
 binding = "POSTS"
 id = "440939d73b0c4b81b5616a1d298dc47e"
 
-# اجرای خودکار گزارش عملیات روانی: هر روز ساعت ۰۹:۰۰ و ۲۱:۰۰ UTC
-# که برابر است با ۱۲:۰۰ ظهر و ۰۰:۰۰ نیمه‌شب به وقت عراق (UTC+3، بدون تغییر ساعت تابستانی)
-[triggers]
-crons = ["0 9,21 * * *"]
+# زمان‌بندی گزارش عملیات روانی از طریق GitHub Actions انجام می‌شود
+# (فایل .github/workflows/psyop-report.yml) — نه Cron Trigger خودِ Cloudflare،
+# چون اکانت رایگان Cloudflare سقف ۵ کرون‌تریگر در کل اکانت داره.
