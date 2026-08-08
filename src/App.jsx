@@ -768,8 +768,12 @@ export default function App() {
           className="iraf-header-inner"
           style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 20px', flexWrap: 'wrap' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <img src={raviLogo} alt="راوی" style={{ height: 46, width: 'auto', display: 'block' }} />
+            <div style={{ borderRight: `1.5px solid ${C.border}`, paddingRight: 12, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.gold, lineHeight: 1.5 }}>روایت زنده‌ی رویدادها</span>
+              <span style={{ fontSize: 10.5, color: C.textFaint, lineHeight: 1.5 }}>هر خبر، همان لحظه</span>
+            </div>
           </div>
 
           <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
