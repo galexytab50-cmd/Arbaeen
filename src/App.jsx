@@ -52,13 +52,15 @@ input { font-family: inherit; }
 .iraf-refresh-btn:hover { background: rgba(27,122,77,0.18); }
 .iraf-refresh-btn:disabled { opacity: 0.6; cursor: default; }
 
-.iraf-tab-btn {
-  display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 8px 8px 0 0;
-  font-size: 13px; font-weight: 700; cursor: pointer; border: none; background: transparent;
-  color: ${C.textFaint}; border-bottom: 2px solid transparent; transition: all 0.15s ease;
+.iraf-layout { display: flex; gap: 22px; align-items: flex-start; }
+.iraf-sidebar { width: 216px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 20px; }
+.iraf-side-btn {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 9px;
+  font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent;
+  background: transparent; color: ${C.textFaint}; text-align: right; width: 100%; transition: all 0.15s ease;
 }
-.iraf-tab-btn:hover { color: ${C.gold}; background: ${C.goldSoft}; }
-.iraf-tab-btn.active { color: ${C.gold}; border-bottom: 2px solid ${C.gold}; background: ${C.goldSoft}; }
+.iraf-side-btn:hover { background: ${C.goldSoft}; color: ${C.gold}; }
+.iraf-side-btn.active { background: ${C.gold}; color: #FFFFFF; box-shadow: 0 2px 6px rgba(27,122,77,0.25); }
 
 .iraf-date-input {
   font-family: inherit; border: 1px solid ${C.border}; border-radius: 8px; padding: 9px 12px;
@@ -71,10 +73,13 @@ input { font-family: inherit; }
   border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
 }
 
+@media (max-width: 780px) {
+  .iraf-layout { flex-direction: column; }
+  .iraf-sidebar { width: 100%; flex-direction: row; overflow-x: auto; position: static; }
+  .iraf-side-btn { flex-shrink: 0; width: auto; white-space: nowrap; }
+}
 @media (max-width: 640px) {
-  .iraf-main { padding: 18px 14px 50px !important; }
-  .iraf-header-row { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
-  .iraf-tabs-row { overflow-x: auto; }
+  .iraf-layout { padding: 16px 14px 50px !important; }
 }
 `;
 
@@ -656,36 +661,36 @@ export default function App() {
       <style>{FONT_IMPORT}</style>
 
       <div style={{ background: C.gold, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px' }}>
-          <span style={{ width: 7, height: 7, borderRadius: 999, background: '#FFFFFF', animation: 'iraf-pulse 1.4s ease-in-out infinite', flexShrink: 0 }} />
-          <span style={{ fontSize: 12.5, color: '#FFFFFF', fontWeight: 600 }}>داشبورد زنده اخبار اربعین</span>
+        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px' }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: '#FFFFFF', animation: 'iraf-pulse 1.4s ease-in-out infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: 17, color: '#FFFFFF', fontWeight: 800 }}>راوی عراق</span>
         </div>
       </div>
 
-      <div style={{ borderBottom: `1px solid ${C.border}`, background: C.surface }}>
-        <div className="iraf-tabs-row" style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', gap: 4, padding: '0 20px' }}>
+      <div className="iraf-layout iraf-scroll" style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px 60px' }}>
+        <aside className="iraf-sidebar">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
-                className={`iraf-tab-btn ${activeTab === tab.key ? 'active' : ''}`}
+                className={`iraf-side-btn ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key)}
               >
-                <Icon size={15} />
+                <Icon size={16} />
                 {tab.label}
               </button>
             );
           })}
-        </div>
-      </div>
+        </aside>
 
-      <main className="iraf-scroll iraf-main" style={{ maxWidth: 1280, margin: '0 auto', padding: '26px 24px 60px' }}>
-        {activeTab === 'live' && <LiveTab />}
-        {activeTab === 'archive' && <ArchiveTab />}
-        {activeTab === 'psyop' && <PsyopTab />}
-        {activeTab === 'infographic' && <InfographicTab />}
-      </main>
+        <main style={{ flex: 1, minWidth: 0 }}>
+          {activeTab === 'live' && <LiveTab />}
+          {activeTab === 'archive' && <ArchiveTab />}
+          {activeTab === 'psyop' && <PsyopTab />}
+          {activeTab === 'infographic' && <InfographicTab />}
+        </main>
+      </div>
     </div>
   );
 }
