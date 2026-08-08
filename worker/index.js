@@ -1,15 +1,12 @@
 // نقطه‌ی ورود اصلی Worker.
 // درخواست‌های /api/* رو خودمون هندل می‌کنیم و بقیه رو به فایل‌های استاتیک (dist) می‌سپاریم.
-// گزارش «عملیات روانی» دیگه خودکار/زمان‌بندی‌شده نیست — فقط با کلیک دکمه‌ی «تولید گزارش»
+// دیگه هیچ فیلتر هشتگ یا زبانی روی پست‌های ورودی اعمال نمی‌شه — هرچی از هر کانالی
+// که ربات توش ادمینه بیاد، مستقیم ذخیره و تو «پوشش زنده اخبار» نمایش داده می‌شه.
+// گزارش «عملیات روانی» هم خودکار/زمان‌بندی‌شده نیست — فقط با کلیک دکمه‌ی «تولید گزارش»
 // تو خودِ سایت ساخته می‌شه، و بازه‌ش «از نیمه‌شب امروز (وقت عراق) تا همین لحظه» است.
 
 const KV_KEY = 'posts';
 const MAX_STORED_POSTS = 5000; // سقف فنی برای جلوگیری از رشد بی‌رویه‌ی KV؛ عملاً نامحدود
-
-// فقط پیام‌هایی که این هشتگ رو داشته باشن ذخیره می‌شن.
-const REQUIRED_HASHTAG = '#اربعین';
-
-const PERSIAN_ONLY_CHARS = /[پچژگ]/;
 
 const STOPWORDS = new Set([
   'و', 'در', 'به', 'از', 'که', 'این', 'را', 'با', 'است', 'برای', 'آن', 'یک', 'هم', 'تا', 'یا',
@@ -55,7 +52,7 @@ export default {
 };
 
 /* -------------------------------------------------------------------
-   وبهوک تلگرام: دریافت پست جدید، فیلتر هشتگ + زبان، ذخیره در KV
+   وبهوک تلگرام: دریافت پست جدید و ذخیره در KV (بدون هیچ فیلتری)
 ------------------------------------------------------------------- */
 async function handleWebhook(request, env) {
   const secretHeader = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
@@ -76,22 +73,12 @@ async function handleWebhook(request, env) {
   }
 
   const text = msg.text || msg.caption || '';
-
-  // فیلتر: هم باید هشتگ موردنظر رو داشته باشه هم متنش فارسی تشخیص داده بشه.
-  // (پست‌های عربی یا بدون هشتگ اصلاً ذخیره نمی‌شن)
-  if (!hasRequiredHashtag(text) || !isPersianText(text)) {
-    if (update.edited_channel_post) {
-      await removePostIfExists(env, `${msg.chat.id}_${msg.message_id}`);
-    }
-    return new Response('OK - filtered out', { status: 200 });
-  }
+  const sourceUsername = msg.chat && msg.chat.username ? msg.chat.username : null;
 
   let photoFileId = null;
   if (Array.isArray(msg.photo) && msg.photo.length > 0) {
     photoFileId = msg.photo[msg.photo.length - 1].file_id;
   }
-
-  const channelUsername = msg.chat && msg.chat.username ? msg.chat.username : null;
 
   const post = {
     id: `${msg.chat.id}_${msg.message_id}`,
@@ -100,7 +87,7 @@ async function handleWebhook(request, env) {
     date: msg.date * 1000,
     photoFileId,
     photoUrl: photoFileId ? `/api/telegram-media?file_id=${encodeURIComponent(photoFileId)}` : null,
-    link: channelUsername ? `https://t.me/${channelUsername}/${msg.message_id}` : null,
+    link: sourceUsername ? `https://t.me/${sourceUsername}/${msg.message_id}` : null,
   };
 
   const existingRaw = await env.POSTS.get(KV_KEY);
@@ -122,37 +109,6 @@ async function handleWebhook(request, env) {
   await env.POSTS.put(KV_KEY, JSON.stringify(list));
 
   return new Response('OK', { status: 200 });
-}
-
-function hasRequiredHashtag(text) {
-  if (!text) return false;
-  const normalize = (s) => s.replace(/ي/g, 'ی').replace(/ك/g, 'ک');
-  return normalize(text).includes(normalize(REQUIRED_HASHTAG));
-}
-
-// تشخیص فارسی بودن متن: اگه حروف اختصاصی فارسی (پ چ ژ گ) توش بود، قطعاً فارسیه.
-// در غیر این صورت، نسبت فرم فارسی حروف (ی/ک) به فرم عربی (ي/ك) رو مقایسه می‌کنیم.
-function isPersianText(text) {
-  if (!text) return false;
-  if (PERSIAN_ONLY_CHARS.test(text)) return true;
-
-  const persianSignal = (text.match(/ی/g) || []).length + (text.match(/ک/g) || []).length;
-  const arabicSignal = (text.match(/ي/g) || []).length + (text.match(/ك/g) || []).length;
-
-  if (persianSignal > arabicSignal) return true;
-  if (arabicSignal > persianSignal) return false;
-  return true; // حالت مبهم (متن خیلی کوتاه) -> رد نکن
-}
-
-async function removePostIfExists(env, postId) {
-  const existingRaw = await env.POSTS.get(KV_KEY);
-  if (!existingRaw) return;
-  let list = [];
-  try { list = JSON.parse(existingRaw); } catch { return; }
-  const filtered = list.filter((p) => p.id !== postId);
-  if (filtered.length !== list.length) {
-    await env.POSTS.put(KV_KEY, JSON.stringify(filtered));
-  }
 }
 
 /* -------------------------------------------------------------------
