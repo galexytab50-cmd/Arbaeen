@@ -2,20 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import {
   Newspaper, RefreshCw, ExternalLink, ImageOff, WifiOff, Loader2,
-  Archive, ShieldAlert, CalendarDays, Hash, AlertTriangle, Image as ImageIcon, Download,
+  Archive, ShieldAlert, CalendarDays, Hash, AlertTriangle, Image as ImageIcon, Download, Clock,
 } from 'lucide-react';
+import raviLogo from './assets/ravi-logo.png';
 
 /* ---------------------------------------------------------------------
-   هویت بصری — داشبورد زنده اخبار اربعین
+   هویت بصری — راوی (بر اساس رنگ لوگو: آبی سرمه‌ای)
 --------------------------------------------------------------------- */
 const C = {
   bg: '#FFFFFF',
   surface: '#FFFFFF',
-  surface2: '#F1F6F3',
-  border: '#E1E8E4',
-  borderSoft: '#ECF1EE',
-  gold: '#1B7A4D',
-  goldSoft: 'rgba(27,122,77,0.10)',
+  surface2: '#F0F1FA',
+  border: '#DEE0F2',
+  borderSoft: '#EBECF8',
+  gold: '#15159C',
+  goldSoft: 'rgba(21,21,156,0.10)',
   maroon: '#D6373F',
   maroonSoft: 'rgba(214,55,63,0.08)',
   text: '#111111',
@@ -49,7 +50,7 @@ input { font-family: inherit; }
   border: 1px solid transparent; border-radius: 7px; padding: 8px 14px; font-size: 12.5px;
   font-weight: 600; cursor: pointer; transition: background 0.15s ease;
 }
-.iraf-refresh-btn:hover { background: rgba(27,122,77,0.18); }
+.iraf-refresh-btn:hover { background: rgba(21,21,156,0.18); }
 .iraf-refresh-btn:disabled { opacity: 0.6; cursor: default; }
 
 .iraf-layout { display: flex; gap: 22px; align-items: flex-start; }
@@ -60,7 +61,7 @@ input { font-family: inherit; }
   background: transparent; color: ${C.textFaint}; text-align: right; width: 100%; transition: all 0.15s ease;
 }
 .iraf-side-btn:hover { background: ${C.goldSoft}; color: ${C.gold}; }
-.iraf-side-btn.active { background: ${C.gold}; color: #FFFFFF; box-shadow: 0 2px 6px rgba(27,122,77,0.25); }
+.iraf-side-btn.active { background: ${C.gold}; color: #FFFFFF; box-shadow: 0 2px 6px rgba(21,21,156,0.30); }
 
 .iraf-date-input {
   font-family: inherit; border: 1px solid ${C.border}; border-radius: 8px; padding: 9px 12px;
@@ -102,6 +103,33 @@ function todayIsoDate() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/* ---------------------------------------------------------------------
+   ساعت زنده (به وقت بغداد)
+--------------------------------------------------------------------- */
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeStr = now.toLocaleTimeString('fa-IR', {
+    timeZone: 'Asia/Baghdad', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const dateStr = now.toLocaleDateString('fa-IR', {
+    timeZone: 'Asia/Baghdad', weekday: 'long', day: 'numeric', month: 'long',
+  });
+
+  return (
+    <div className="iraf-mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <Clock size={13} />
+      <span>{timeStr}</span>
+      <span style={{ opacity: 0.7 }}>· {dateStr} · به‌وقت بغداد</span>
+    </div>
+  );
 }
 
 /* ---------------------------------------------------------------------
@@ -591,7 +619,7 @@ function InfographicTab() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `3px solid ${C.gold}`, paddingBottom: 16, marginBottom: 24 }}>
               <div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: C.gold }}>گزارش عملیات روانی</div>
-                <div style={{ fontSize: 12.5, color: C.textFaint, marginTop: 4 }}>داشبورد زنده اخبار اربعین</div>
+                <div style={{ fontSize: 12.5, color: C.textFaint, marginTop: 4 }}>راوی عراق</div>
               </div>
               <div style={{ textAlign: 'left' }}>
                 <div className="iraf-mono" style={{ fontSize: 11, color: C.textFaint }}>
@@ -668,7 +696,7 @@ function InfographicTab() {
             )}
 
             <div style={{ marginTop: 26, paddingTop: 14, borderTop: `1px solid ${C.borderSoft}`, textAlign: 'center', fontSize: 10.5, color: C.textFaint }}>
-              تولیدشده توسط داشبورد زنده اخبار اربعین
+              تولیدشده توسط راوی عراق
             </div>
           </div>
         </div>
@@ -679,7 +707,7 @@ function InfographicTab() {
 
 
 /* ---------------------------------------------------------------------
-   اپ اصلی — نوار تب‌ها بالای صفحه
+   اپ اصلی — هدر با لوگو، ساعت زنده و ناوبری مناطق
 --------------------------------------------------------------------- */
 const TABS = [
   { key: 'live', label: 'پوشش زنده اخبار', icon: Newspaper },
@@ -688,44 +716,95 @@ const TABS = [
   { key: 'infographic', label: 'اینفوگرافیک', icon: ImageIcon },
 ];
 
+const REGIONS = [
+  { key: 'iraq', label: 'راوی عراق' },
+  { key: 'usa', label: 'راوی آمریکا' },
+  { key: 'europe', label: 'راوی اروپا' },
+  { key: 'latam', label: 'راوی آمریکای لاتین' },
+];
+
+function ComingSoonRegion({ label }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '110px 20px', color: C.textFaint }}>
+      <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 10, color: C.text }}>{label}</div>
+      <div style={{ fontSize: 13.5 }}>این بخش به‌زودی راه‌اندازی می‌شود.</div>
+    </div>
+  );
+}
+
 export default function App() {
+  const [activeRegion, setActiveRegion] = useState('iraq');
   const [activeTab, setActiveTab] = useState('live');
 
   return (
     <div className="iraf-root">
       <style>{FONT_IMPORT}</style>
 
-      <div style={{ background: C.gold, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px' }}>
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: '#FFFFFF', animation: 'iraf-pulse 1.4s ease-in-out infinite', flexShrink: 0 }} />
-          <span style={{ fontSize: 17, color: '#FFFFFF', fontWeight: 800 }}>راوی عراق</span>
+      {/* نوار باریک بالا: ساعت زنده به وقت بغداد */}
+      <div style={{ background: '#0D0D6E' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '6px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+          <LiveClock />
         </div>
       </div>
 
-      <div className="iraf-layout iraf-scroll" style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px 60px' }}>
-        <aside className="iraf-sidebar">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                className={`iraf-side-btn ${activeTab === tab.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.key)}
-              >
-                <Icon size={16} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </aside>
+      {/* هدر اصلی: لوگو + ناوبری مناطق */}
+      <div style={{ background: C.gold, borderBottom: `1px solid ${C.border}` }}>
+        <div
+          className="iraf-header-inner"
+          style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 20px', flexWrap: 'wrap' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src={raviLogo} alt="راوی" style={{ height: 42, width: 'auto', display: 'block' }} />
+          </div>
 
-        <main style={{ flex: 1, minWidth: 0 }}>
-          {activeTab === 'live' && <LiveTab />}
-          {activeTab === 'archive' && <ArchiveTab />}
-          {activeTab === 'psyop' && <PsyopTab />}
-          {activeTab === 'infographic' && <InfographicTab />}
-        </main>
+          <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {REGIONS.map((r) => (
+              <button
+                key={r.key}
+                onClick={() => setActiveRegion(r.key)}
+                style={{
+                  background: activeRegion === r.key ? 'rgba(255,255,255,0.22)' : 'transparent',
+                  color: '#FFFFFF',
+                  border: `1px solid ${activeRegion === r.key ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.25)'}`,
+                  borderRadius: 8, padding: '8px 15px', fontSize: 13, fontWeight: 700,
+                  cursor: 'pointer', transition: 'all 0.15s ease',
+                }}
+              >
+                {r.label}
+              </button>
+            ))}
+          </nav>
+        </div>
       </div>
+
+      {activeRegion === 'iraq' ? (
+        <div className="iraf-layout iraf-scroll" style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 24px 60px' }}>
+          <aside className="iraf-sidebar">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  className={`iraf-side-btn ${activeTab === tab.key ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.key)}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </aside>
+
+          <main style={{ flex: 1, minWidth: 0 }}>
+            {activeTab === 'live' && <LiveTab />}
+            {activeTab === 'archive' && <ArchiveTab />}
+            {activeTab === 'psyop' && <PsyopTab />}
+            {activeTab === 'infographic' && <InfographicTab />}
+          </main>
+        </div>
+      ) : (
+        <ComingSoonRegion label={REGIONS.find((r) => r.key === activeRegion).label} />
+      )}
     </div>
   );
 }
