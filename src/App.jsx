@@ -106,9 +106,16 @@ function todayIsoDate() {
 }
 
 /* ---------------------------------------------------------------------
-   ساعت زنده (به وقت بغداد)
+   ساعت زنده (بر اساس منطقه‌ی فعال)
 --------------------------------------------------------------------- */
-function LiveClock() {
+const REGION_CLOCKS = {
+  iraq: { timeZone: 'Asia/Baghdad', label: 'به‌وقت بغداد' },
+  usa: { timeZone: 'America/Chicago', label: 'به‌وقت مرکزی آمریکا' },
+  europe: { timeZone: 'Europe/London', label: 'به‌وقت لندن' },
+  latam: { timeZone: 'America/Caracas', label: 'به‌وقت ونزوئلا' },
+};
+
+function LiveClock({ timeZone, label }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -117,17 +124,17 @@ function LiveClock() {
   }, []);
 
   const timeStr = now.toLocaleTimeString('fa-IR', {
-    timeZone: 'Asia/Baghdad', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
   const dateStr = now.toLocaleDateString('fa-IR', {
-    timeZone: 'Asia/Baghdad', weekday: 'long', day: 'numeric', month: 'long',
+    timeZone, weekday: 'long', day: 'numeric', month: 'long',
   });
 
   return (
     <div className="iraf-mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: 6 }}>
       <Clock size={13} />
       <span>{timeStr}</span>
-      <span style={{ opacity: 0.7 }}>· {dateStr} · به‌وقت بغداد</span>
+      <span style={{ opacity: 0.7 }}>· {dateStr} · {label}</span>
     </div>
   );
 }
@@ -735,26 +742,27 @@ function ComingSoonRegion({ label }) {
 export default function App() {
   const [activeRegion, setActiveRegion] = useState('iraq');
   const [activeTab, setActiveTab] = useState('live');
+  const clockInfo = REGION_CLOCKS[activeRegion] || REGION_CLOCKS.iraq;
 
   return (
     <div className="iraf-root">
       <style>{FONT_IMPORT}</style>
 
-      {/* نوار باریک بالا: ساعت زنده به وقت بغداد */}
+      {/* نوار باریک بالا: ساعت زنده بر اساس منطقه‌ی فعال */}
       <div style={{ background: '#0D0D6E' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '6px 20px', display: 'flex', justifyContent: 'flex-end' }}>
-          <LiveClock />
+          <LiveClock timeZone={clockInfo.timeZone} label={clockInfo.label} />
         </div>
       </div>
 
-      {/* هدر اصلی: لوگو + ناوبری مناطق */}
-      <div style={{ background: C.gold, borderBottom: `1px solid ${C.border}` }}>
+      {/* هدر اصلی: سفید، تا لوگو واضح دیده بشه */}
+      <div style={{ background: '#FFFFFF', borderBottom: `2px solid ${C.gold}` }}>
         <div
           className="iraf-header-inner"
           style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 20px', flexWrap: 'wrap' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src={raviLogo} alt="راوی" style={{ height: 42, width: 'auto', display: 'block' }} />
+            <img src={raviLogo} alt="راوی" style={{ height: 46, width: 'auto', display: 'block' }} />
           </div>
 
           <nav style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -763,9 +771,9 @@ export default function App() {
                 key={r.key}
                 onClick={() => setActiveRegion(r.key)}
                 style={{
-                  background: activeRegion === r.key ? 'rgba(255,255,255,0.22)' : 'transparent',
-                  color: '#FFFFFF',
-                  border: `1px solid ${activeRegion === r.key ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.25)'}`,
+                  background: activeRegion === r.key ? C.gold : 'transparent',
+                  color: activeRegion === r.key ? '#FFFFFF' : C.gold,
+                  border: `1px solid ${activeRegion === r.key ? C.gold : C.border}`,
                   borderRadius: 8, padding: '8px 15px', fontSize: 13, fontWeight: 700,
                   cursor: 'pointer', transition: 'all 0.15s ease',
                 }}
