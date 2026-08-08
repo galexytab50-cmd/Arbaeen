@@ -8,6 +8,14 @@
 const KV_KEY = 'posts';
 const MAX_STORED_POSTS = 5000; // سقف فنی برای جلوگیری از رشد بی‌رویه‌ی KV؛ عملاً نامحدود
 
+// «خبر فوری الجزیره» یه کانال عمومیه که ما ادمینش نیستیم، پس به‌جای وبهوک،
+// از صفحه‌ی پیش‌نمایش عمومی تلگرام (t.me/s/...) می‌خونیمش — این صفحه برای هر
+// کانال عمومی بدون نیاز به هیچ دسترسی خاصی در دسترسه.
+const BREAKING_NEWS_CHANNEL = 'aljazeeraBrk';
+const BREAKING_NEWS_CACHE_KEY = 'breaking_news_cache';
+const BREAKING_NEWS_CACHE_MS = 3 * 60 * 1000; // ۳ دقیقه کش، تا هم تلگرام هم API دیپ‌سیک زیاد صدا زده نشن
+const MAX_BREAKING_NEWS = 8;
+
 const STOPWORDS = new Set([
   'و', 'در', 'به', 'از', 'که', 'این', 'را', 'با', 'است', 'برای', 'آن', 'یک', 'هم', 'تا', 'یا',
   'های', 'شد', 'شده', 'کرد', 'می', 'کند', 'ها', 'اما', 'نیز', 'هر', 'بر', 'بود', 'باشد', 'دارد',
@@ -44,6 +52,10 @@ export default {
 
     if (path === '/api/psyop-report/generate' && request.method === 'POST') {
       return handlePsyopReportGenerate(request, env);
+    }
+
+    if (path === '/api/breaking-news' && request.method === 'GET') {
+      return handleBreakingNewsGet(env);
     }
 
     if (path === '/api/admin/clear-posts' && request.method === 'POST') {
@@ -116,8 +128,164 @@ async function handleWebhook(request, env) {
 }
 
 /* -------------------------------------------------------------------
-   تب «پوشش زنده اخبار» - همه‌ی پست‌ها، بدون محدودیت نمایشی
+   نوار «خبر فوری» — از صفحه‌ی عمومی پیش‌نمایش تلگرام می‌خونه، به فارسی
+   ترجمه می‌کنه (با دیپ‌سیک)، و چند دقیقه کش می‌کنه.
 ------------------------------------------------------------------- */
+async function handleBreakingNewsGet(env) {
+  const now = Date.now();
+
+  const cachedRaw = await env.POSTS.get(BREAKING_NEWS_CACHE_KEY);
+  if (cachedRaw) {
+    try {
+      const cached = JSON.parse(cachedRaw);
+      if (cached.fetchedAt && now - cached.fetchedAt < BREAKING_NEWS_CACHE_MS) {
+        return new Response(JSON.stringify({ items: cached.items }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      }
+    } catch {
+      // کش خراب بود، رد می‌شیم و از نو می‌سازیم
+    }
+  }
+
+  try {
+    const items = await fetchAndTranslateBreakingNews(env);
+    await env.POSTS.put(BREAKING_NEWS_CACHE_KEY, JSON.stringify({ fetchedAt: now, items }));
+    return new Response(JSON.stringify({ items }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  } catch (e) {
+    // اگه گرفتن نسخه‌ی جدید خطا داد ولی کش قدیمی داشتیم، همون رو برگردون (بهتر از خالی)
+    if (cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw);
+        return new Response(JSON.stringify({ items: cached.items }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      } catch {
+        // ادامه به پاسخ خالی زیر
+      }
+    }
+    return new Response(JSON.stringify({ items: [], error: e.message }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
+}
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+function stripHtmlTags(html) {
+  return decodeHtmlEntities(
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .trim()
+  );
+}
+
+async function fetchAndTranslateBreakingNews(env) {
+  const res = await fetch(`https://t.me/s/${BREAKING_NEWS_CHANNEL}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RaviBot/1.0)' },
+  });
+  if (!res.ok) throw new Error(`دریافت صفحه‌ی تلگرام با خطای ${res.status} مواجه شد`);
+  const html = await res.text();
+
+  const chunks = html.split('class="tgme_widget_message_wrap').slice(1);
+  const raw = [];
+
+  for (const chunk of chunks) {
+    const postMatch = chunk.match(/data-post="([^"]+)"/);
+    const textMatch = chunk.match(/class="tgme_widget_message_text js-message_text"[^>]*>([\s\S]*?)<\/div>/);
+    const timeMatch = chunk.match(/<time datetime="([^"]+)"/);
+    if (!postMatch || !textMatch) continue;
+
+    const text = stripHtmlTags(textMatch[1]);
+    if (!text) continue;
+
+    raw.push({
+      id: postMatch[1],
+      link: `https://t.me/${postMatch[1]}`,
+      originalText: text,
+      date: timeMatch ? new Date(timeMatch[1]).getTime() : Date.now(),
+    });
+  }
+
+  // جدیدترین‌ها آخر صفحه‌ان
+  raw.reverse();
+  const latest = raw.slice(0, MAX_BREAKING_NEWS);
+
+  if (latest.length === 0) return [];
+
+  const translations = await translateBatchToPersian(env, latest.map((it) => it.originalText));
+
+  return latest.map((it, i) => ({
+    id: it.id,
+    link: it.link,
+    date: it.date,
+    text: translations[i] || it.originalText,
+  }));
+}
+
+// ترجمه‌ی دسته‌ای (یک تماس API برای چند خبر، برای سرعت و صرفه‌جویی)
+async function translateBatchToPersian(env, texts) {
+  if (!env.DEEPSEEK_API_KEY) return texts;
+  if (texts.length === 0) return [];
+
+  const numbered = texts.map((t, i) => `${i + 1}. ${safeTruncate(t, 500)}`).join('\n');
+  const prompt = `متن‌های زیر خبرهای عربی هستند. هرکدام را به فارسیِ روان و خبری ترجمه کن.
+فقط یک آرایه‌ی JSON از رشته‌ها برگردان، دقیقاً به همان ترتیب و همان تعداد ورودی، بدون هیچ توضیح یا متن اضافه.
+
+${numbered}`;
+
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: 'تو فقط و فقط یک آرایه‌ی JSON از رشته‌های ترجمه‌شده برمی‌گردانی، بدون هیچ متن اضافه.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+      }),
+    });
+
+    const rawBody = await res.text();
+    if (!res.ok) return texts;
+
+    let data;
+    try { data = JSON.parse(rawBody); } catch { return texts; }
+
+    const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!content) return texts;
+
+    const cleaned = stripLoneSurrogates(content.replace(/```json/g, '').replace(/```/g, '').trim());
+    const parsed = JSON.parse(cleaned);
+
+    if (Array.isArray(parsed) && parsed.length === texts.length) return parsed;
+    return texts;
+  } catch {
+    return texts;
+  }
+}
+
+
 // پاک‌کردن کامل اخبار ذخیره‌شده (پوشش زنده + آرشیو، چون هر دو از همین کلید می‌خونن).
 // عملی غیرقابل‌بازگشته، برای همین با همون WEBHOOK_SECRET محافظت می‌شه
 // و کلید رو تو خودِ مرورگر ذخیره نمی‌کنیم — هر بار باید واردش کنی.
@@ -138,6 +306,9 @@ async function handleClearPosts(request, env) {
   });
 }
 
+/* -------------------------------------------------------------------
+   تب «پوشش زنده اخبار» - همه‌ی پست‌ها، بدون محدودیت نمایشی
+------------------------------------------------------------------- */
 async function handlePosts(env) {
   const raw = await env.POSTS.get(KV_KEY);
   let posts = [];
