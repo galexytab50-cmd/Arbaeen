@@ -1,0 +1,22 @@
+name: Sync Telegram Webhook
+
+# بعد از هر push به main، خودکار وبهوک تلگرام رو با آدرس ثابت سایت هماهنگ می‌کنه
+# تا دیگه هیچ‌وقت نیاز نباشه دستی این‌کارو انجام بدی.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # امکان اجرای دستی از تب Actions برای تست
+
+jobs:
+  sync-webhook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Cloudflare deploy to finish
+        run: sleep 45
+
+      - name: Set Telegram webhook
+        run: |
+          curl -f -X GET "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/setWebhook" \
+            --data-urlencode "url=https://ravi.galexytab50.workers.dev/api/telegram-webhook" \
+            --data-urlencode "secret_token=${{ secrets.WEBHOOK_SECRET }}"
