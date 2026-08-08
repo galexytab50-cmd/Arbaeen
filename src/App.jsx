@@ -81,14 +81,17 @@ input { font-family: inherit; }
   .iraf-post-grid { grid-template-columns: 1fr; }
 }
 
+.iraf-ticker-viewport { overflow: hidden; direction: ltr; }
 .iraf-ticker-track {
-  display: inline-block; color: #FFFFFF; font-size: 12px; font-weight: 600;
-  padding-right: 100%; white-space: nowrap;
-  animation: iraf-ticker 35s linear infinite;
+  display: inline-flex; width: max-content; white-space: nowrap;
+  animation: iraf-ticker 40s linear infinite;
+}
+.iraf-ticker-item {
+  color: #FFFFFF; font-size: 12px; font-weight: 600; padding-left: 50px; direction: rtl; unicode-bidi: plaintext;
 }
 @keyframes iraf-ticker {
-  from { transform: translateX(0%); }
-  to { transform: translateX(-100%); }
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 @media (max-width: 780px) {
@@ -184,11 +187,18 @@ function BreakingNewsTicker() {
 
   const text = items.map((it) => it.text).join('   •   ');
 
+  const segment = (
+    <span className="iraf-ticker-item">
+      <span style={{ color: '#FFD400', fontWeight: 800, marginLeft: 10 }}>خبر فوری</span>
+      {text}
+    </span>
+  );
+
   return (
-    <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+    <div className="iraf-ticker-viewport" style={{ flex: 1, minWidth: 0 }}>
       <div className="iraf-ticker-track">
-        <span style={{ color: '#FFD400', fontWeight: 800, marginLeft: 10 }}>خبر فوری</span>
-        {text}
+        {segment}
+        {segment}
       </div>
     </div>
   );
