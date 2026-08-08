@@ -1,0 +1,11 @@
+name = "ravi-monitoring-center"
+main = "worker/index.js"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "POSTS"
+id = "440939d73b0c4b81b5616a1d298dc47e"
