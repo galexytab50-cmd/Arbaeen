@@ -1,22 +1,38 @@
 name: Sync Telegram Webhook
 
-# بعد از هر push به main، خودکار وبهوک تلگرام رو با آدرس ثابت سایت هماهنگ می‌کنه
-# تا دیگه هیچ‌وقت نیاز نباشه دستی این‌کارو انجام بدی.
-
 on:
   push:
     branches: [main]
-  workflow_dispatch: {} # امکان اجرای دستی از تب Actions برای تست
+  workflow_dispatch: {}
 
 jobs:
   sync-webhook:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug secret presence (does not reveal the value)
+        run: |
+          if [ -z "$BOT_TOKEN" ]; then
+            echo "BOT_TOKEN is EMPTY or NOT SET"
+          else
+            echo "BOT_TOKEN is set, length: ${#BOT_TOKEN}"
+          fi
+          if [ -z "$WEBHOOK_SECRET" ]; then
+            echo "WEBHOOK_SECRET is EMPTY or NOT SET"
+          else
+            echo "WEBHOOK_SECRET is set, length: ${#WEBHOOK_SECRET}"
+          fi
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+
       - name: Wait for Cloudflare deploy to finish
         run: sleep 45
 
       - name: Set Telegram webhook
         run: |
-          curl -f -X GET "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/setWebhook" \
+          curl -f -X GET "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
             --data-urlencode "url=https://ravi.galexytab50.workers.dev/api/telegram-webhook" \
-            --data-urlencode "secret_token=${{ secrets.WEBHOOK_SECRET }}"
+            --data-urlencode "secret_token=${WEBHOOK_SECRET}"
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
