@@ -174,6 +174,7 @@ function LiveTab() {
   const [posts, setPosts] = useState([]);
   const [status, setStatus] = useState('loading');
   const [refreshing, setRefreshing] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const cancelledRef = useRef(false);
 
@@ -205,6 +206,34 @@ function LiveTab() {
     return () => { cancelledRef.current = true; clearInterval(interval); };
   }, []);
 
+  const handleClearAll = async () => {
+    const confirmed = window.confirm('همه‌ی اخبار ذخیره‌شده (پوشش زنده و آرشیو) برای همیشه پاک می‌شود. مطمئنی؟');
+    if (!confirmed) return;
+
+    const secret = window.prompt('برای تأیید، رمز مدیریتی (WEBHOOK_SECRET) را وارد کن:');
+    if (!secret) return;
+
+    setClearing(true);
+    try {
+      const res = await fetch('/api/admin/clear-posts', {
+        method: 'POST',
+        headers: { 'X-Admin-Secret': secret },
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPosts([]);
+        setStatus('empty');
+        window.alert('همه‌ی اخبار پاک شد.');
+      } else {
+        window.alert(data.error || 'پاک‌کردن اخبار با خطا مواجه شد.');
+      }
+    } catch (e) {
+      window.alert('ارتباط با سرور برقرار نشد.');
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
@@ -212,10 +241,16 @@ function LiveTab() {
           {lastUpdated ? `آخرین به‌روزرسانی: ${lastUpdated.toLocaleTimeString('fa-IR')}` : 'در حال بارگذاری...'}
           {status === 'ready' && ` · ${posts.length.toLocaleString('fa-IR')} خبر`}
         </span>
-        <button className="iraf-refresh-btn" onClick={() => load(true)} disabled={refreshing}>
-          <RefreshCw size={13} style={refreshing ? { animation: 'iraf-spin 1s linear infinite' } : undefined} />
-          بروزرسانی
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="iraf-refresh-btn" onClick={handleClearAll} disabled={clearing} style={{ background: C.maroonSoft, color: C.maroon }}>
+            <AlertTriangle size={13} />
+            {clearing ? 'در حال پاک‌کردن...' : 'پاک‌کردن همه‌ی اخبار'}
+          </button>
+          <button className="iraf-refresh-btn" onClick={() => load(true)} disabled={refreshing}>
+            <RefreshCw size={13} style={refreshing ? { animation: 'iraf-spin 1s linear infinite' } : undefined} />
+            بروزرسانی
+          </button>
+        </div>
       </div>
 
       {status === 'loading' && <StateBlock icon={<Loader2 size={22} style={{ animation: 'iraf-spin 1s linear infinite' }} />} text="در حال دریافت اخبار..." />}
