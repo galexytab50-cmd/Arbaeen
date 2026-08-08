@@ -76,6 +76,11 @@ input { font-family: inherit; }
   border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
 }
 
+.iraf-post-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 700px) {
+  .iraf-post-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 780px) {
   .iraf-layout { flex-direction: column; }
   .iraf-sidebar { width: 100%; flex-direction: row; overflow-x: auto; position: static; }
@@ -187,7 +192,7 @@ function PostCard({ post }) {
 
 function PostGrid({ posts }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 18, alignItems: 'start' }}>
+    <div className="iraf-post-grid">
       {posts.map((p) => (
         <PostCard key={p.id} post={p} />
       ))}
