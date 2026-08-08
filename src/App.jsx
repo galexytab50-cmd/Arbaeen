@@ -42,9 +42,11 @@ input { font-family: inherit; }
 .iraf-fadeup { animation: iraf-fadeup 0.4s ease both; }
 
 .iraf-card {
-  background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; min-width: 0;
+  background: ${C.surface}; border: 1.5px solid ${C.gold}; border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(21,21,156,0.08); overflow: hidden; min-width: 0;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
+.iraf-card:hover { box-shadow: 0 6px 16px rgba(21,21,156,0.16); transform: translateY(-2px); }
 .iraf-refresh-btn {
   display: flex; align-items: center; gap: 6px; background: ${C.goldSoft}; color: ${C.gold};
   border: 1px solid transparent; border-radius: 7px; padding: 8px 14px; font-size: 12.5px;
@@ -159,7 +161,7 @@ function PostCard({ post }) {
       )}
       <div style={{ padding: '13px 15px' }}>
         {post.text && (
-          <div style={{ fontSize: 13.5, lineHeight: 1.9, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ fontSize: 13.5, lineHeight: 1.9, whiteSpace: 'pre-wrap', wordBreak: 'break-word', textAlign: 'justify' }}>
             {post.text}
           </div>
         )}
@@ -185,7 +187,7 @@ function PostCard({ post }) {
 
 function PostGrid({ posts }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 18, alignItems: 'start' }}>
       {posts.map((p) => (
         <PostCard key={p.id} post={p} />
       ))}
