@@ -81,6 +81,16 @@ input { font-family: inherit; }
   .iraf-post-grid { grid-template-columns: 1fr; }
 }
 
+.iraf-ticker-track {
+  display: inline-block; color: #FFFFFF; font-size: 12px; font-weight: 600;
+  padding-right: 100%; white-space: nowrap;
+  animation: iraf-ticker 35s linear infinite;
+}
+@keyframes iraf-ticker {
+  from { transform: translateX(0%); }
+  to { transform: translateX(-100%); }
+}
+
 @media (max-width: 780px) {
   .iraf-layout { flex-direction: column; }
   .iraf-sidebar { width: 100%; flex-direction: row; overflow-x: auto; position: static; }
@@ -142,6 +152,44 @@ function LiveClock({ timeZone, label }) {
       <Clock size={13} />
       <span>{timeStr}</span>
       <span style={{ opacity: 0.7 }}>· {dateStr} · {label}</span>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------
+   نوار خبر فوری (الجزیره، ترجمه‌شده به فارسی) — فقط برای راوی عراق
+--------------------------------------------------------------------- */
+const BREAKING_NEWS_POLL_MS = 60000;
+
+function BreakingNewsTicker() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/breaking-news');
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.items)) setItems(data.items);
+      } catch {
+        // خطای شبکه رو نادیده می‌گیریم؛ نوار قبلی (اگه بود) همون‌جا می‌مونه
+      }
+    };
+    load();
+    const interval = setInterval(load, BREAKING_NEWS_POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  if (items.length === 0) return <div />;
+
+  const text = items.map((it) => it.text).join('   •   ');
+
+  return (
+    <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+      <div className="iraf-ticker-track">
+        <span style={{ color: '#FFD400', fontWeight: 800, marginLeft: 10 }}>خبر فوری</span>
+        {text}
+      </div>
     </div>
   );
 }
@@ -755,9 +803,12 @@ export default function App() {
     <div className="iraf-root">
       <style>{FONT_IMPORT}</style>
 
-      {/* نوار باریک بالا: ساعت زنده بر اساس منطقه‌ی فعال */}
+      {/* نوار باریک بالا: خبر فوری (فقط راوی عراق) + ساعت زنده بر اساس منطقه‌ی فعال */}
       <div style={{ background: '#0D0D6E' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '6px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '6px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {activeRegion === 'iraq' && <BreakingNewsTicker />}
+          </div>
           <LiveClock timeZone={clockInfo.timeZone} label={clockInfo.label} />
         </div>
       </div>
