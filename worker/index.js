@@ -46,6 +46,10 @@ export default {
       return handlePsyopReportGenerate(request, env);
     }
 
+    if (path === '/api/admin/clear-posts' && request.method === 'POST') {
+      return handleClearPosts(request, env);
+    }
+
     // هر درخواست دیگه‌ای -> فایل‌های استاتیک ساخته‌شده توسط Vite (پوشه‌ی dist)
     return env.ASSETS.fetch(request);
   },
@@ -114,6 +118,26 @@ async function handleWebhook(request, env) {
 /* -------------------------------------------------------------------
    تب «پوشش زنده اخبار» - همه‌ی پست‌ها، بدون محدودیت نمایشی
 ------------------------------------------------------------------- */
+// پاک‌کردن کامل اخبار ذخیره‌شده (پوشش زنده + آرشیو، چون هر دو از همین کلید می‌خونن).
+// عملی غیرقابل‌بازگشته، برای همین با همون WEBHOOK_SECRET محافظت می‌شه
+// و کلید رو تو خودِ مرورگر ذخیره نمی‌کنیم — هر بار باید واردش کنی.
+async function handleClearPosts(request, env) {
+  const secretHeader = request.headers.get('X-Admin-Secret');
+  if (!env.WEBHOOK_SECRET || secretHeader !== env.WEBHOOK_SECRET) {
+    return new Response(JSON.stringify({ ok: false, error: 'رمز نادرست است.' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+  }
+
+  await env.POSTS.delete(KV_KEY);
+
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
+
 async function handlePosts(env) {
   const raw = await env.POSTS.get(KV_KEY);
   let posts = [];
